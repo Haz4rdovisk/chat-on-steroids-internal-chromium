@@ -134,6 +134,19 @@ it('renders above native browser views and remains inside the owner window', asy
   expect(view.setVisible).toHaveBeenLastCalledWith(true);
 });
 
+it('closes on a second toggle instead of reopening or reattaching the native menu', async () => {
+  const owner = new fake.FakeBrowserWindow() as any;
+  menu.attachViewMenuWindow(owner);
+  const request = { anchor: { x: 40, y: 0, width: 30, height: 28 }, snapshot: snapshot() };
+
+  expect(await menu.toggleViewMenu(request)).toEqual({ open: true });
+  const view = fake.views.at(-1)!;
+  expect(await menu.toggleViewMenu(request)).toEqual({ open: false });
+  expect(menu.viewMenuState()).toEqual({ open: false });
+  expect(owner.contentView.addChildView).toHaveBeenCalledTimes(1);
+  expect(view.setVisible).toHaveBeenLastCalledWith(false);
+});
+
 it('accepts commands only from its own narrow preload and forwards them to the shell', async () => {
   const owner = new fake.FakeBrowserWindow() as any;
   menu.attachViewMenuWindow(owner);
