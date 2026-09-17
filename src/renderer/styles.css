@@ -449,10 +449,35 @@ code {
   display: grid;
   grid-template-rows: 40px minmax(0, 1fr);
   overflow: hidden;
-  border-right: 1px solid var(--line);
+  /* Mirror the workspace's rounded panel transition instead of ending in a hard vertical cut. */
+  padding-right: 1px;
   background: var(--page);
 }
+.browser-dock::before,
+.browser-dock::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 7;
+}
+.browser-dock::before {
+  width: var(--r-lg);
+  height: var(--r-lg);
+  background: var(--sidebar-color, var(--sunk));
+  mask-image: radial-gradient(circle at 0 100%, transparent var(--r-lg), #000 calc(var(--r-lg) + .5px));
+}
+.browser-dock::after {
+  width: min(160px, 25vw);
+  height: 100%;
+  border-right: 1px solid var(--line);
+  border-top-right-radius: var(--r-lg);
+  mask-image: linear-gradient(to bottom, #000, transparent 75%), linear-gradient(to left, #000, transparent);
+  mask-composite: intersect;
+}
 .browser-dock-tabs {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -460,8 +485,18 @@ code {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 5px 8px;
-  border-bottom: 1px solid var(--line);
+  border-top-right-radius: var(--r-lg);
   scrollbar-width: none;
+}
+.browser-dock-tabs::after {
+  content: '';
+  position: absolute;
+  right: var(--r-lg);
+  bottom: 0;
+  left: 8px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--line) 12%, var(--line) 88%, transparent);
 }
 .browser-dock-tabs::-webkit-scrollbar { display: none; }
 .browser-tab {
