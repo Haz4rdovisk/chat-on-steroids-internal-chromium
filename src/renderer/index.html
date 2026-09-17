@@ -169,9 +169,7 @@
                 </div>
               </div>
               <details class="connection-advanced" id="connectionAdvanced">
-                <summary aria-label="Advanced" title="Advanced">
-                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>
-                </summary>
+                <summary aria-label="Advanced" title="Advanced">Advanced</summary>
                 <div class="connection-advanced-body">
                   <p class="connection-advanced-alert" id="connectionAdvancedAlert" hidden></p>
 
@@ -182,6 +180,18 @@
                     <div class="connection-advanced-row" id="connectionAdvancedChat"><button class="copy" type="button">Chat ID</button><span class="meta sr-only">—</span><i aria-hidden="true"></i></div>
                     <div class="connection-advanced-row" id="connectionAdvancedRequest"><button class="copy" type="button">Current request</button><span class="meta sr-only">—</span><i aria-hidden="true"></i></div>
                     <div class="connection-advanced-row" id="connectionAdvancedApp"><span>Reaching the app</span><span class="meta sr-only">—</span><i aria-hidden="true"></i></div>
+                  </div>
+
+                  <div class="connection-advanced-caption"><span>Augment ChatGPT</span></div>
+                  <div class="connection-advanced-card connection-advanced-preferences">
+                    <label class="connection-advanced-setting" for="connectionAdvancedOverwrite">
+                      <span>Overwrite ChatGPT</span>
+                      <span class="sw"><input id="connectionAdvancedOverwrite" type="checkbox" disabled /><i></i></span>
+                    </label>
+                    <label class="connection-advanced-setting" for="connectionAdvancedDurations">
+                      <span>Timestamps</span>
+                      <span class="sw"><input id="connectionAdvancedDurations" type="checkbox" disabled /><i></i></span>
+                    </label>
                   </div>
 
                   <details class="connection-runtime" id="connectionRuntime"><summary>Runtime diagnostics</summary>

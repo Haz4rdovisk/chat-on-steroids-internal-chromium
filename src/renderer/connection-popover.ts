@@ -356,16 +356,43 @@ export interface ConnectionAdvancedController {
   refreshIfOpen(): void;
 }
 
-export function initConnectionAdvanced(): ConnectionAdvancedController {
+export function initConnectionAdvanced(onLayoutChanged?: () => void): ConnectionAdvancedController {
   const details = $<HTMLDetailsElement>('connectionAdvanced');
+  const runtime = $<HTMLDetailsElement>('connectionRuntime');
   const refresh = $<HTMLButtonElement>('connectionAdvancedRefresh');
   const copy = $<HTMLButtonElement>('connectionAdvancedCopy');
+  const overwrite = $<HTMLInputElement>('connectionAdvancedOverwrite');
+  const durations = $<HTMLInputElement>('connectionAdvancedDurations');
   let current: CompanionDiagnostics | null = null;
   let host: InternalBrowserDockState | null = null;
   let busy = false;
+  let preferenceBusy = false;
 
   const paintControls = (): void => {
     refresh.disabled = busy;
+    const preferencesReady = Boolean(current?.preferences) && !busy && !preferenceBusy;
+    overwrite.disabled = durations.disabled = !preferencesReady;
+    overwrite.checked = current?.preferences.overwrite ?? false;
+    durations.checked = current?.preferences.durations ?? false;
+  };
+
+  const updatePreference = async (patch: { overwrite?: boolean; durations?: boolean }): Promise<void> => {
+    if (busy || preferenceBusy || !current) return;
+    preferenceBusy = true;
+    paintControls();
+    try {
+      const response = await window.api.browserPreferences(patch);
+      if (!response.ok) {
+        toast(response.error);
+        return;
+      }
+      current = { ...current, preferences: response.data };
+    } catch {
+      toast(t('Unable to reach the extension. Connect it and refresh.'));
+    } finally {
+      preferenceBusy = false;
+      paintControls();
+    }
   };
 
   const request = async (): Promise<void> => {
@@ -408,6 +435,8 @@ export function initConnectionAdvanced(): ConnectionAdvancedController {
     });
   }
   refresh.addEventListener('click', () => void request());
+  overwrite.addEventListener('change', () => void updatePreference({ overwrite: overwrite.checked }));
+  durations.addEventListener('change', () => void updatePreference({ durations: durations.checked }));
   copy.addEventListener('click', () => {
     const lines = [$('connectionPipelineWhy').textContent ?? ''];
     const cells = [...$('connectionAdvancedGrid').children].map((node) => node.textContent ?? '');
@@ -416,7 +445,11 @@ export function initConnectionAdvanced(): ConnectionAdvancedController {
       if (response.ok && response.data) toast(t('Diagnostics copied'));
     });
   });
-  details.addEventListener('toggle', () => { if (details.open) void request(); });
+  details.addEventListener('toggle', () => {
+    runtime.open = details.open;
+    onLayoutChanged?.();
+    if (details.open) void request();
+  });
   window.setInterval(() => {
     if (details.open && (host || current) && !busy) paintDiagnosticAge(host, current);
   }, 1000);

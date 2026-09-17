@@ -52,7 +52,9 @@ initPet();
 initSetupGuide();
 // Escape the translucent sidebar's backdrop-filter containing block.
 document.body.append($('connectionPopover'));
-const connectionAdvanced = initConnectionAdvanced();
+const connectionAdvanced = initConnectionAdvanced(() => {
+  if (document.getElementById('connectionPopover')) positionConnectionPopover();
+});
 const appearance = initAppearance(patch => { void save(patch); });
 
 /** Same shape the platform uses; mirrored here only to grey out step 2 until it is valid. */

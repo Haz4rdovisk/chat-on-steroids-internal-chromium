@@ -547,6 +547,7 @@ it('keeps global connection controls in a compact sidebar popover', async () => 
   expect(doc.getElementById('connectionPopoverSettings')).toBeNull();
   const advanced = doc.getElementById('connectionAdvanced') as HTMLDetailsElement;
   const runtime = doc.getElementById('connectionRuntime') as HTMLDetailsElement;
+  expect(advanced.querySelector('summary')!.textContent?.trim()).toBe('Advanced');
   advanced.open = runtime.open = true;
   trigger.click(); trigger.click();
   expect(advanced.open).toBe(false);
@@ -606,9 +607,16 @@ it('renders companion diagnostics in the native Advanced connection drawer', asy
       delivery: { at: now - 1_000, ok: true, events: 4, total: 42, status: 200, error: null }
     }
   };
+  const browserPreferences = vi.fn(async (patch: any = {}) => ({
+    ok: true,
+    data: {
+      overwrite: typeof patch.overwrite === 'boolean' ? patch.overwrite : true,
+      durations: typeof patch.durations === 'boolean' ? patch.durations : false
+    }
+  }));
   const mounted = await mountChat({}, [], {
     companionDiagnostics: () => Promise.resolve({ ok: true, data: diagnostics }),
-    browserPreferences: () => Promise.resolve({ ok: true, data: { overwrite: true, durations: false } })
+    browserPreferences
   });
   const doc = mounted.window.document;
   const details = doc.getElementById('connectionAdvanced') as HTMLDetailsElement;
@@ -622,6 +630,18 @@ it('renders companion diagnostics in the native Advanced connection drawer', asy
   expect(doc.getElementById('connectionPipelineOwner')!.classList.contains('is-done')).toBe(true);
   expect(doc.getElementById('connectionAdvancedGrid')!.textContent).toContain('companion browser');
   expect(doc.getElementById('connectionAdvancedGrid')!.textContent).toContain('fiber v13 · run run-live');
+  const overwrite = doc.getElementById('connectionAdvancedOverwrite') as HTMLInputElement;
+  const durations = doc.getElementById('connectionAdvancedDurations') as HTMLInputElement;
+  expect(overwrite.checked).toBe(true);
+  expect(durations.checked).toBe(false);
+  expect(overwrite.disabled).toBe(false);
+  expect(durations.disabled).toBe(false);
+  expect((doc.getElementById('connectionRuntime') as HTMLDetailsElement).open).toBe(true);
+
+  durations.checked = true;
+  durations.dispatchEvent(new mounted.window.Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(browserPreferences).toHaveBeenCalledWith({ durations: true }));
+  expect(durations.checked).toBe(true);
 });
 
 it('uses Internal Chromium as the host source when the optional #237 API is present', async () => {
