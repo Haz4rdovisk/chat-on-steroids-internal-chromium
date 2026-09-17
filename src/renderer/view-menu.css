@@ -52,7 +52,8 @@ html:lang(zh), html:lang(zh-TW) body { letter-spacing: 0; }
 }
 
 button {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
   align-items: center;
   width: 100%;
   min-height: 39px;
@@ -68,13 +69,29 @@ button {
   cursor: default;
 }
 button:hover, button:focus-visible { background: var(--hover); color: var(--ink); outline: none; }
-button[aria-pressed='true'] { border-color: color-mix(in srgb, var(--accent-edge) 72%, transparent); background: var(--accent-wash); color: var(--ink); }
+button[aria-pressed='true'] { border-color: transparent; background: transparent; color: var(--ink); }
+button[aria-pressed='true']:hover,
+button[aria-pressed='true']:focus-visible { background: var(--hover); }
 button:disabled { opacity: .42; }
 
 .ico { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .ico.fill { fill: currentColor; stroke: none; }
-button[aria-pressed='true'] .ico { color: var(--accent); }
 button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-kbd, em { margin-left: auto; color: var(--faint); font: inherit; font-size: calc(10.5px * var(--text-scale, 1)); font-style: normal; white-space: nowrap; }
+kbd, em { color: var(--faint); font: inherit; font-size: calc(10.5px * var(--text-scale, 1)); font-style: normal; white-space: nowrap; }
+button > em { grid-column: 3; justify-self: end; }
+button > kbd { grid-column: 3; justify-self: end; }
+button:not(:has(.menu-check)) > kbd { grid-column: 4; }
 em + kbd { margin-left: 8px; }
+.menu-check {
+  grid-column: 4;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--soft);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+button[aria-pressed='true'] .menu-check { opacity: 1; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }

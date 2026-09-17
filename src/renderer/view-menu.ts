@@ -43,7 +43,7 @@ function apply(snapshot: ViewMenuSnapshot): void {
   label('viewActualSize', snapshot.labels.actualSize);
   button('viewBrowser').setAttribute('aria-pressed', String(snapshot.browserOpen));
   button('viewPet').setAttribute('aria-pressed', String(snapshot.petVisible));
-  button('viewSidebar').setAttribute('aria-pressed', String(snapshot.sidebarCollapsed));
+  button('viewSidebar').setAttribute('aria-pressed', String(!snapshot.sidebarCollapsed));
   button('viewPet').disabled = snapshot.petVisible && !snapshot.petReady;
   document.getElementById('viewZoomValue')!.textContent = `${snapshot.zoomPercent}%`;
 }
