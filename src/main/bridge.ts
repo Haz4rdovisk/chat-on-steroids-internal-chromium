@@ -1882,6 +1882,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     const accepted = acknowledgeBrowserPreferences(await readBody(req));
     return json(res, accepted ? 200 : 409, { ok: accepted }, origin);
   }
+  if (route === '/browser-host' && req.method === 'POST') {
+    if (!browserHostHandler) return json(res, 503, { error: 'browser_host_unavailable' }, origin);
+    return json(res, 200, await browserHostHandler(await readBody(req)), origin);
+  }
 
   if (route === '/diagnostics' && req.method === 'POST') {
     recordCompanionDiagnostics(await readBody(req));
@@ -5346,6 +5350,7 @@ function queueResumeCommand(sessionId: string, token: string): Command {
  * having a browser-launching side effect nobody asked for.
  */
 let openInBrowser: ((url: string) => Promise<void>) | null = null;
+let browserHostHandler: ((request: unknown) => Promise<unknown>) | null = null;
 
 /**
  * How long one cold browser start is given to show up before another may be attempted.
@@ -5393,6 +5398,11 @@ function deliverAfterLaunchWindow(now = Date.now()): void {
 
 export function setBrowserOpener(open: ((url: string) => Promise<void>) | null): void {
   openInBrowser = open;
+}
+
+/** Electron-owned logical ChatGPT tab operations used by the bundled companion. */
+export function setBrowserHostHandler(handler: ((request: unknown) => Promise<unknown>) | null): void {
+  browserHostHandler = handler;
 }
 
 /** The one place this app writes a ChatGPT conversation URL. */
@@ -8916,6 +8926,7 @@ export function resetBridgeForTests(): void {
   resetContinuationsForTests();
   sessionTokens.clear();
   openInBrowser = null;
+  browserHostHandler = null;
   if (browserLaunchTimer) clearTimeout(browserLaunchTimer);
   browserLaunchTimer = null;
   lastBrowserLaunchAt = 0;

@@ -28,10 +28,10 @@ bridge protocol **14** in the checked declarations (`package.json`, `src/main/ve
 ## 1. What the whole app is meant to do
 
 Chat On Steroids is a Windows/macOS/Linux Electron workspace around ChatGPT. The user can work
-from the desktop app while ChatGPT generates answers in its own browser conversation. The app
-sends instructions, records the conversation, supplies local tools over MCP, and coordinates
-long-running work. The companion extension connects that browser conversation to the local
-session. ChatGPT still owns model execution and its native account/model availability.
+from the desktop app while ChatGPT generates answers in an app-owned Chromium conversation. The
+app sends instructions, records the conversation, supplies local tools over MCP, and coordinates
+long-running work. The bundled companion extension connects that hosted browser conversation to
+the local session. ChatGPT still owns model execution and its native account/model availability.
 
 The product should feel like one continuous workspace: choose a project, send a task, watch
 real progress, correct it while it runs, inspect what actually happened, and continue without
@@ -40,8 +40,9 @@ losing the project, history, workers or queued instructions when a chat grows to
 ### The user's normal path
 
 1. **Set up access.** Approve folders and capabilities, configure a tunnel, connect Core in
-   ChatGPT, and load/pair the companion extension. Desktop and Plugins are optional connectors.
-   Connection, browser pairing and account model availability have separate status.
+   ChatGPT, and sign in once through the built-in ChatGPT browser. The bundled companion loads
+   automatically; Desktop and Plugins are optional connectors. Connection, browser pairing and
+   account model availability have separate status.
 2. **Choose where work belongs.** Add a local project folder or use an unfiled chat. A project
    gives the session its working folder and root `AGENTS.md`; permission still comes from the
    approved roots. Removing a project grouping keeps its chats and folder association.
@@ -96,7 +97,7 @@ losing the project, history, workers or queued instructions when a chat grows to
 - Waiting chats and sleeping workers retain their durable history and identity, not an
   indefinite browser tab. Settled app-owned pages become eligible for New Chat reuse after
   two minutes without work and automatic closure after five. Fresh document/draft/generation
-  checks remain mandatory; selected or recently accessed Chrome tabs veto idle closure, and pins veto closure and
+  checks remain mandatory; selected or recently accessed hosted tabs veto idle closure, and pins veto closure and
   New Chat reuse. Terminal, blocked, cancelled, superseded and duplicate cleanup retains its
   separate authority. Unknown/personal ownership, live work and pending delivery are not idle.
 - Unknown identity fails closed where a wrong choice could mutate, attribute or message the
@@ -141,7 +142,7 @@ The renderer has no direct filesystem, command, secret or generic main-process a
 | Filesystem | Approved root plus canonical real path, regardless of native/virtual spelling. |
 | MCP ingress | Normalized HTTP request id. |
 | Tool attribution | Request id → exact conversation id → local session epoch. |
-| Browser observation/action | Conversation + Chrome document id + navigation epoch + message/turn id. |
+| Browser observation/action | Conversation + hosted browser document id + navigation epoch + message/turn id. |
 | Session continuation | Local session id + continuation token + A/B lineage + send checkpoints. |
 | Input | Outbox UUID + local session + elected browser owner or exact tool recipient. |
 | Agent routing | Exact prime family/run incarnation + worker conversation; `worker-1` alone is ambiguous. |
@@ -198,7 +199,7 @@ define the tool/config/wire contract. README and worklogs are secondary and can 
 | Desktop | Windows on; macOS retains its off default and separate native OS consent; Linux supports extension browser control. | Existing screen/control grants also govern browser tools; unsupported native clipboard remains masked. No new per-tab permission dialog. |
 | Shell/UI | Dark theme, minimize to tray, no automatic connector connection/login startup by default. | Optional browser/finish/plan choices are resolved by current config and their consumer, not invented from absent fields. |
 | Plugin auto-refresh | Off. | Local status/discovery never claims ChatGPT refreshed its connector snapshot. |
-| Background chats | On. | Omitted legacy settings use On; explicit saved On/Off remains exact. Cold Windows startup requests a minimized browser window. |
+| Background chats | On. | Omitted legacy settings use On; explicit saved On/Off remains exact. Cold startup prewarms one hidden app-owned ChatGPT document; it does not launch or minimize an external browser. |
 
 Keep evidence levels separate in all reports: **source → tests → build → package → installed
 payload → live browser/device/provider behavior**. Passing one level does not prove the next.
@@ -229,11 +230,11 @@ Paths in this section are repository-relative. Most mechanisms have `main`, `sha
 | Continuation | `src/main/session/{continuation,resume-gate,handoff,handoff-prompt}.ts`: A→B transaction, send ambiguity and exact brief. |
 | Automation | `src/main/goal.ts`, `src/shared/{goal,goal-templates}.ts`: objectives, switches, obligations, provider/helper decisions. |
 | Agents | `src/main/agents.ts`, `src/renderer/{agent-panel,agent-communication}.ts`: independent prime families, staged mutations and addressed messages. |
-| Browser orchestration | `src/main/bridge.ts`, `browser.ts`, `browser-startup.ts`, `browser-wake.ts`, `browser-window-layout.ts`, `browser-preferences.ts`; `src/shared/browser-preferences.ts`. |
+| Browser orchestration | `src/main/bridge.ts`, `internal-browser.ts`, `browser-startup.ts`, `browser-wake.ts`, `browser-preferences.ts`; `src/shared/{internal-browser,browser-preferences}.ts`; `src/renderer/internal-browser.ts`: app-owned ChatGPT host, lifecycle mirror and right-side split. `browser.ts` remains for other explicit external-browser consumers, not ChatGPT orchestration. |
 | Extension | `extension/{manifest.json,chatgpt-dom.js,content.js,fiber.js,background.js,usage.js,overlay.css,popup.html,popup.css,popup.js}`: injection worlds, native observations/actions, journal and UI. |
 | Models/usage | `src/main/chat-models.ts`, `session/usage.ts`; `src/shared/{chat-models,usage}.ts`; `src/renderer/{chat-models,context-meter,usage}.ts`: account observations vs local estimates. |
 | External plugins | `src/main/plugins/{catalog,installer,manager,exposure,oauth}.ts`, `plugins-ipc.ts`, `plugin-refresh.ts`, `src/shared/{plugins,plugin-refresh}.ts`, `src/renderer/plugins.ts`. |
-| Renderer boundary | `src/main/ipc.ts`, `edit-context-menu.ts`, `src/preload/index.ts`; `src/renderer/{main,chat,dom,tool-result,timeline-scroll,sidebar-resize,browser-preferences,connection-popover,i18n}.ts`, `locales/{es,zh-CN}.json`, `index.html`, `styles.css`. |
+| Renderer boundary | `src/main/ipc.ts`, `edit-context-menu.ts`, `src/preload/index.ts`; `src/renderer/{main,chat,dom,tool-result,timeline-scroll,sidebar-resize,internal-browser,browser-preferences,connection-popover,i18n}.ts`, `locales/{es,zh-CN,zh-TW}.json`, `index.html`, `styles.css`. |
 | Appearance | `src/shared/appearance.ts`, `src/main/appearance-schema.ts`, `src/renderer/appearance.ts`: bounded saved colors/typography, field-wise Settings merge, immediate semantic CSS projection. `window-layout.ts` shares native caption/backing colors. |
 | Desktop Pets | `src/main/{pet-library,pet-overlay}.ts`, `src/shared/{pets,pet-activity}.ts`, `src/preload/pet-overlay.ts`, `src/renderer/{pet-overlay,pet-machine,pet-choreography,pets,pet}.ts`: package validation, overlay host, task projection, animation and library controls. |
 | Native Desktop | `src/main/computer/{index,helper,browser-chords,windows-api,windows-capture,windows-apps,windows-keys}.ts`, `src/shared/windows-computer.ts`, `mcp/tools-desktop-{windows,macos}.ts`, `native/macos-desktop-helper/*`, `native/macos-desktop-addon/*`. |
@@ -1441,6 +1442,10 @@ through a debugger. This fixture is not signed-in ChatGPT or installed-runtime a
 
 ### Direct background browser control
 
+This is a separate subsystem from the app-owned ChatGPT host below. Browser Use/CDP keeps its
+own debugger leases, page ids, permissions and action lifecycle; do not route it through the
+hosted ChatGPT tab abstraction merely because both ultimately use Chromium.
+
 Chrome 125+ grants the companion required `debugger`, `tabs` and HTTP(S) host access. The app
 adds no per-tab approval UI: existing screen/control settings govern observation/input and
 Read-only still masks mutation. Only an explicit `browser_tabs new` creates a tab; listing or
@@ -1581,7 +1586,7 @@ selection for the exact conversation, pins known turn identity, and resolves pre
 selection without advancing its last-work timestamp. Unknown timing does not invent normal-model
 proof for other features. All continuation paths still require their exact source/MCP/queue proof.
 
-Direct Chrome selection is observed even with the picker closed. The existing MAIN scan reads
+Direct hosted-page selection is observed even with the picker closed. The existing MAIN scan reads
 the current native picker state, including September's retained `dropdownContent.props`, then
 stamps exact model/effort and document/route for the isolated reader. The older closed-trigger
 model/effort join remains supported. Ambiguous triggers and unrecognized state remain unknown.
@@ -1602,7 +1607,7 @@ Selection and discovery also await the native picker and its owned dialog closin
 existing three-second observer bound. Escape targets that picker focus trap; dispatch alone
 is not closure. A stuck picker refuses success before strict composer focus/insertion checks.
 During that operation only, the native picker menu/dialog has its animation suppressed:
-hidden Chrome windows can suspend the exit animation and retain an already-closed focus scope.
+background Chromium documents can suspend the exit animation and retain an already-closed focus scope.
 Native unmount still proves closure; the temporary style is removed on completion/cancellation.
 A retained `closed` menu is reopened through its native trigger before reading selection.
 Picker access first waits for native hydration and prepares the owned Chat surface through
@@ -1615,13 +1620,39 @@ its still-empty document and opening authority to the first user input, rather t
 second tab. Startup's remaining unknown-catalog opening exception is a current gap in §21,
 not permission to add more startup openers.
 
-### Browser choice and opening discipline
+### App-owned Chromium and opening discipline
 
-`browser.ts`, `browser-preferences.ts` and `browser-startup.ts` keep the selected supported
-Chromium browser/profile separate from ChatGPT account state. Use the selected browser's
-process evidence; a disconnected bridge or sleeping MV3 socket does not prove it is closed.
-OS wake launches require positive process absence and coalesce within one absence episode.
-The socket is a heartbeat/wake path; HTTP remains command/evidence authority.
+`internal-browser.ts` owns one persistent `persist:cos-browser` Electron session and one real
+`WebContentsView` per logical ChatGPT tab. The bundled MV3 companion remains the browser-side
+transport and policy owner; `/browser-host` supplies only the Chrome-like tab-lifetime surface
+(`query/get/create/update/remove/reload/events`) needed by Electron-hosted documents.
+`chrome.tabs.sendMessage` remains native extension runtime messaging and is never proxied through
+that host surface. Owning the browser host does not authorize inferring conversation ownership
+from active, recent or visible state. The socket remains heartbeat/wake; HTTP remains
+command/evidence authority.
+
+Once the owner `BrowserWindow` exists, every live hosted view stays attached and `setVisible(true)`
+with real nonzero geometry. The selected view receives the left-side dock bounds while the dock
+is open; all other views, and every view while the dock is hidden, are parked fully offscreen at
+negative `x`. Do not replace parking with detachment, zero bounds or `setVisible(false)`: native
+ChatGPT controls, including model-picker preparation, require layout geometry during background
+work. User-held/revealed tabs project as pinned so ordinary idle recycling cannot discard a page
+the user deliberately kept.
+
+The visible shell order is `ChatGPT dock → sidebar → workspace`. The dock separator is its right
+edge: dragging right grows the ChatGPT surface and dragging left shrinks it. The View menu is not
+a renderer DOM dropdown. `view-menu.ts` owns a narrow local `WebContentsView`, reinserted as the
+last native child when opened so it can paint above hosted ChatGPT views without changing their
+geometry. Its preload exposes only the fixed browser/pet/sidebar/zoom commands. The menu snapshot
+projects translated labels and the current Appearance palette/font settings; the menu derives the
+same semantic CSS tokens as the main renderer rather than maintaining an independent theme.
+
+Electron lifecycle is mapped deliberately: `did-start-loading` is the single Chrome-like loading
+and document boundary, `did-start-navigation` only updates the main-frame destination,
+same-document navigation remains same-document, and `did-stop-loading` completes the load. The
+bounded browser-host event journal plus generation/cursor state carries those events across MV3
+service-worker suspension. Extension identity-sensitive handlers drain that mirror before acting;
+the mirror supplies lifecycle evidence, never local-tool authority.
 
 External navigation may hide its destination URL under ChatGPT-only host permissions.
 A completed tab absent from a successful ChatGPT URL query can release the departed
@@ -1634,10 +1665,12 @@ of the exact departed page clears the dismissal; unresolved work reuses its last
 timestamp and normal deadline. A tab close never fabricates provider completion.
 
 Browser-only preferences suppress automatic opening as defined by their owner. Background
-operations reuse a suitable existing window unchanged. If a new background window is actually
-authorized, its shared layout policy bounds it to 45% of the work area and 800×600, then
-minimizes it. User-selected foreground actions retain their own intent. Window geometry,
-process absence, tab election and provider hydration are different decisions.
+operations create or reuse logical hosted tabs without revealing the dock; explicit foreground
+actions may reveal it. Startup prewarms one hidden ChatGPT document so the bundled companion can
+pair without launching Chrome, Edge or Brave. Logical activation, dock visibility, tab-opening
+authority, document election and provider hydration are separate decisions. The renderer presents
+the host as a resizable **right-side split** using the current shell tokens/panel language; the
+sidebar remains the left visual anchor. Do not restore the fork's old left-dock layout.
 
 ### Overwrite and recovery presentation
 
@@ -2416,8 +2449,9 @@ measures actual animation wakes and process CPU with unchanged artwork.
 interface actions use the shared Phosphor glyph map in
 `renderer/dom.ts` and `renderer/icons.css`; keep the bespoke CoS mark, language flags and data
 visualizations distinct, but do not introduce a second ad-hoc action-icon family.
-Projects, workers, plans, model choice, usage and plugins have focused modules (§4). The renderer
-calls a fixed `preload/index.ts` allowlist into validated
+`renderer/internal-browser.ts` owns only the shell split/tab-strip projection for native hosted
+`WebContentsView`s. Projects, workers, plans, model choice, usage and plugins have focused modules
+(§4). The renderer calls a fixed `preload/index.ts` allowlist into validated
 `ipc.ts`/`plugins-ipc.ts` handlers.
 No arbitrary IPC invocation, Node access, filesystem path opening or renderer-side secret store.
 Changing the selected session synchronously retires prior data/control ownership and handoff.
@@ -2445,7 +2479,9 @@ One tunnel image and one Security and login image avoid duplicate paths. Both pl
 remain visible together, side by side when space permits and stacked at narrow widths, with
 translated written callouts anchored to the highlighted controls and native enlargement. Required Core tunnel/API-key fields
 have a subtle blue empty state; a stored key satisfies it without exposing the secret. Optional
-Desktop fields are not marked required. Setup assets contain no embedded image metadata.
+Desktop fields are not marked required. The final browser step signs into the app-owned ChatGPT
+Chromium session; it must not instruct the user to install an unpacked companion in an external
+Chrome profile. Setup assets contain no embedded image metadata.
 The final Setup card uses the supplied `tool-approval.jpg` screenshot at compact width and
 explains ChatGPT's Always allow separately from Plugins' Allow all actions. The existing
 authorized model-discovery browser handoff emits `setup:toolApprovalNotice` only after its
@@ -2723,15 +2759,15 @@ Every opening collapses Advanced and its nested Runtime diagnostics.
 Extension-only Overwrite/Timestamps and the redundant settings link are absent. A red header
 Connect action remains visible while disconnected and disappears only on confirmed connection,
 briefly highlighting the footer status (respecting reduced motion). Setup stays reachable from
-Settings and from Connect when configuration is incomplete. The View menu has its own foreground
-stacking layer; Appearance rows align controls at a shared minimum height and Setup uses a stable
+Settings and from Connect when configuration is incomplete. The View menu is a foreground native
+`WebContentsView`, not a z-index workaround; Appearance rows align controls at a shared minimum height and Setup uses a stable
 responsive title/language grid across locales.
 The companion sends a bounded snapshot on the authenticated `/diagnostics` route, outside the
 authority-bearing `/status` response. One pending diagnostic page read is shared; current
 connection/document epochs fence delayed results. The bridge cache is presentation only and
 clears on disconnect/stop/reset. Request discovery, receipt, exact ownership and recorded tool
-activity remain distinct evidence. Optional embedded-host presentation does not enable or
-implement an embedded browser.
+activity remain distinct evidence. Internal Chromium presentation is app-owned, but presentation
+state never becomes request or conversation authority.
 
 `tunnel/*` owns pinned-client discovery, child lifetime, health metrics and confirmed outages;
 `diagnostics.ts` tests the chain hop by hop. Transient health evidence must not produce repeated

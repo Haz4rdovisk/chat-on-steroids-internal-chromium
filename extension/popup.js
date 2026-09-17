@@ -241,7 +241,7 @@ function paintAlert(status, info) {
   const pairError = status && status.pairError;
   const error = page && page.lastError;
   const text = incompatible
-    ? `App v${status.appVersion || '?'} (protocol ${status.appProtocol ?? '?'}); companion v${status.extensionVersion || '?'} (protocol ${status.extensionProtocol ?? '?'}). Open your browser's Extensions page, enable Developer mode, then Update / Reload this companion. If the mismatch remains, use Open extension folder in Chat On Steroids and load that folder. Reload ChatGPT tabs when their active work is finished.`
+    ? `App v${status.appVersion || '?'} (protocol ${status.appProtocol ?? '?'}); companion v${status.extensionVersion || '?'} (protocol ${status.extensionProtocol ?? '?'}). The companion is bundled with Chat On Steroids. Finish active work, then restart the app so the built-in browser reloads the matching companion. If the mismatch remains, reinstall the same app version.`
     : pairError && pairError.message
       ? pairError.message
       : pairError && pairError.error === 'secure_storage_unavailable'

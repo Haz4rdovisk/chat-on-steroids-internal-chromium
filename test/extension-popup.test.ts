@@ -30,13 +30,16 @@ it('reports only app reachability from compatible health and pairing', () => {
   expect(document.getElementById('state')!.textContent).toBe('App not reachable');
 });
 
-it('explains manual mismatch recovery with both versions', () => {
+it('explains bundled-companion mismatch recovery with both versions', () => {
   const document = openPopup();
   (popup!.window as any).paintAlert({ connected: true, paired: true, compatible: false, appVersion: '2.0.7', appProtocol: 13, extensionVersion: '2.0.6', extensionProtocol: 12 }, null);
   const alert = document.getElementById('alert')!;
   expect(alert.textContent).toContain('2.0.7'); expect(alert.textContent).toContain('2.0.6');
   expect(alert.textContent).toContain('protocol 13'); expect(alert.textContent).toContain('protocol 12');
-  expect(alert.textContent).toContain('Developer mode'); expect(alert.textContent).toContain('Open extension folder');
+  expect(alert.textContent).toContain('bundled with Chat On Steroids');
+  expect(alert.textContent).toContain('restart the app');
+  expect(alert.textContent).not.toContain('Developer mode');
+  expect(alert.textContent).not.toContain('Open extension folder');
 });
 
 it('requires this chat session receipt before claiming delivery even with global delivery success', () => {

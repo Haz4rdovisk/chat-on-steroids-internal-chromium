@@ -1,16 +1,18 @@
 import './icons.css';
-import { ui, uiText, t, initLanguage } from './i18n.js';
+import { ui, uiText, t, initLanguage, currentLanguage } from './i18n.js';
 import { paintPluginRefreshReminder } from './plugin-refresh-reminder.js';
 import { initUsage, refreshUsage } from './usage.js';
 import { initSidebarResize } from './sidebar-resize.js';
 import { initPlugins, applyPluginsState } from './plugins.js';
 import { initBrowserPreferences } from './browser-preferences.js';
 import { initConnectionAdvanced } from './connection-popover.js';
+import { initInternalBrowserDock } from './internal-browser.js';
 import { initSetupGuide } from './setup-guide.js';
 import { initAppearance } from './appearance.js';
 import { initPet } from './pet.js';
 import { initPets } from './pets.js';
 import { initSkillsLibrary } from './skills-library.js';
+import { defaultAppearance } from '../shared/appearance.js';
 import type { AppearanceSettings } from '../shared/appearance.js';
 /**
  * Renderer. No Node, no filesystem, no network — everything goes through window.api.
@@ -28,7 +30,7 @@ import type { AppearanceSettings } from '../shared/appearance.js';
 
 import type { AppApi, SettingsPatch } from '../preload/index.js';
 import { requiresApprovedFilesystemRoot } from '../shared/capabilities.js';
-import type { AppState, Capability, ChatBrowser, LogEntry, SurfaceStatus } from '../shared/types.js';
+import type { AppState, Capability, LogEntry, SurfaceStatus } from '../shared/types.js';
 import {
   browserExtensionRequired,
   isNewer,
@@ -216,20 +218,67 @@ let zoomEdited = false;
 void api.getZoom().then(result => {
   if (zoomEdited || !result.ok || typeof result.data !== 'number' || !Number.isFinite(result.data)) return;
   zoomFactor = result.data;
-  $('zoomReset').textContent = `${Math.round(zoomFactor * 100)}%`;
 });
 async function zoom(next: number): Promise<void> {
   zoomEdited = true;
   const result = await run(api.setZoom(Math.min(1.5, Math.max(.75, next))));
-  if (result !== null) { zoomFactor = result; $('zoomReset').textContent = `${Math.round(result * 100)}%`; }
+  if (result !== null) zoomFactor = result;
 }
-$('zoomOut').addEventListener('click', () => void zoom(zoomFactor - .1));
-$('zoomIn').addEventListener('click', () => void zoom(zoomFactor + .1));
-$('zoomActualSize').addEventListener('click', () => void zoom(1));
 document.addEventListener('keydown', (event) => {
   if (!(event.ctrlKey || event.metaKey) || !['+', '=', '-', '0'].includes(event.key)) return;
   event.preventDefault(); void zoom(event.key === '0' ? 1 : zoomFactor + (event.key === '-' ? -.1 : .1));
 });
+
+function initViewMenuControls(
+  sidebarLayout: ReturnType<typeof initSidebarResize>,
+  internalBrowserDock: ReturnType<typeof initInternalBrowserDock>
+): void {
+  const trigger = $<HTMLButtonElement>('viewMenuToggle');
+  ui(trigger, 'aria-label', () => t('View'));
+  ui(trigger, 'title', () => t('View'));
+  const snapshot = () => {
+    const uiPrefs = requestedSettings?.ui ?? state?.config.ui;
+    const theme = uiPrefs?.theme ?? (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+    return {
+      browserOpen: internalBrowserDock.isOpen(),
+      petVisible: pet.isVisible(),
+      petReady: pet.isReady(),
+      sidebarCollapsed: sidebarLayout.isCollapsed(),
+      zoomPercent: Math.round(zoomFactor * 100),
+      theme,
+      appearance: uiPrefs?.appearance ?? defaultAppearance(),
+      language: currentLanguage(),
+      labels: {
+        browser: t('ChatGPT browser'),
+        pet: t('Desktop pet'),
+        sidebar: t('Toggle Sidebar'),
+        zoomIn: t('Zoom In'),
+        zoomOut: t('Zoom Out'),
+        actualSize: t('Actual Size')
+      }
+    };
+  };
+
+  trigger.addEventListener('click', async () => {
+    const rect = trigger.getBoundingClientRect();
+    const reply = await api.toggleViewMenu({
+      anchor: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      snapshot: snapshot()
+    });
+    if (!reply.ok) { toast(reply.error); return; }
+    trigger.setAttribute('aria-expanded', String(reply.data.open));
+  });
+  api.onViewMenuOpenChanged(open => trigger.setAttribute('aria-expanded', String(open)));
+  api.onViewMenuCommand(command => {
+    trigger.setAttribute('aria-expanded', 'false');
+    if (command === 'browser') { void internalBrowserDock.toggle(); return; }
+    if (command === 'pet') { pet.toggle(); return; }
+    if (command === 'sidebar') { sidebarLayout.toggle(); return; }
+    if (command === 'zoom-in') { void zoom(zoomFactor + .1); return; }
+    if (command === 'zoom-out') { void zoom(zoomFactor - .1); return; }
+    if (command === 'zoom-reset') void zoom(1);
+  });
+}
 $('tabs').addEventListener('click', (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-tab]');
   if (button?.dataset.tab) showTab(button.dataset.tab);
@@ -489,7 +538,6 @@ function save(over: { readOnly?: boolean; theme?: 'light' | 'dark'; appearance?:
     },
     ui: {
       ...previous.ui,
-      chatBrowser: $<HTMLSelectElement>('chatBrowser').value as ChatBrowser,
       finishTool: $<HTMLInputElement>('finishTool').checked,
       planBackend: $<HTMLSelectElement>('planBackend').value as 'chatgpt' | 'api',
       finishLeadMinutes: Number($<HTMLSelectElement>('finishLeadMinutes').value),
@@ -1068,7 +1116,6 @@ function apply(next: AppState): void {
     previousState?.config.tunnel.desktopTunnelId
   );
   applyValue($<HTMLInputElement>('binaryPath'), config.tunnel.binaryPath, previousState?.config.tunnel.binaryPath);
-  applyValue($<HTMLSelectElement>('chatBrowser'), config.ui.chatBrowser ?? 'chrome', previousState?.config.ui.chatBrowser ?? 'chrome');
   $<HTMLSelectElement>('planBackend').value = config.ui.planBackend ?? 'chatgpt';
   applyChecked($<HTMLInputElement>('finishTool'), config.ui.finishTool === true, previousState?.config.ui.finishTool);
   applyValue($<HTMLSelectElement>('finishLeadMinutes'), String(config.ui.finishLeadMinutes ?? 5), String(previousState?.config.ui.finishLeadMinutes ?? 5));
@@ -1837,7 +1884,6 @@ document.addEventListener('keydown', (event) => {
   $('sidebarConnection').focus();
 });
 
-$('bridgeDownload').addEventListener('click', () => void run(api.downloadExtension()));
 $('updateExtension').addEventListener('click', () => {
   showAllSteps = true;
   if (state) apply(state);
@@ -1857,7 +1903,9 @@ async function refresh(): Promise<void> {
 }
 
 buildGroups();
-initSidebarResize();
+const sidebarLayout = initSidebarResize();
+const internalBrowserDock = initInternalBrowserDock();
+initViewMenuControls(sidebarLayout, internalBrowserDock);
 initUsage();
 initPlugins(apply);
 initPets(api, pet);

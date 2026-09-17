@@ -23,13 +23,7 @@
     <div class="app" data-screen="chat">
       <div class="app-topbar">
         <button class="btn" id="sidebarToggle" type="button" aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true" title="Toggle sidebar (Ctrl+B)"><i class="ico ph ph-sidebar-simple" aria-hidden="true"></i></button>
-        <details class="view-menu" id="viewMenu"><summary>View</summary><div class="view-menu-items">
-          <button class="btn" id="sidebarMenuToggle" type="button">Toggle Sidebar <kbd>Ctrl+B</kbd></button>
-          <hr />
-          <button class="btn" id="zoomIn" type="button">Zoom In <kbd>Ctrl++</kbd></button>
-          <button class="btn" id="zoomOut" type="button">Zoom Out <kbd>Ctrl+−</kbd></button>
-          <button class="btn" id="zoomActualSize" type="button">Actual Size <span id="zoomReset">100%</span><kbd>Ctrl+0</kbd></button>
-        </div></details>
+        <button class="btn view-menu-trigger" id="viewMenuToggle" type="button" aria-label="View" aria-haspopup="menu" aria-expanded="false" title="View"><i class="ico ph ph-dots-three" aria-hidden="true"></i></button>
       </div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-resize" id="sidebarResize" role="separator" tabindex="0" aria-label="Chat list width" aria-orientation="vertical" aria-controls="sidebar" title="Drag to resize · Double-click to reset"></div>
@@ -164,6 +158,11 @@
             </section>
           </div>
         </div>
+      </aside>
+      <aside class="browser-dock" id="browserDock" aria-label="ChatGPT browser" hidden>
+        <div class="browser-dock-resize" id="browserDockResize" role="separator" tabindex="0" aria-label="Resize ChatGPT browser" aria-orientation="vertical" aria-controls="browserDock" title="Drag to resize · Double-click to reset"></div>
+        <div class="browser-dock-tabs" id="browserDockTabs" role="tablist" aria-label="ChatGPT tabs"></div>
+        <div class="browser-dock-slot" id="browserDockSlot"></div>
       </aside>
       <!-- ------------------------------------------------------------ header -->
       <header>
@@ -662,41 +661,20 @@
               </li>
 
               <!-- 6 -->
-              <!--
-                The extension is setup, not settings. It is what lets this app see which chat a
-                tool call came from, so the timeline, Compact & resume and sub-agents are all
-                dark without it — which made "buried in a settings pane behind a gear" exactly
-                the wrong place for the one-time instructions.
-              -->
               <li class="step" data-step="browser">
                 <div class="step-mark">
                   <i class="ico ph ph-check tick" aria-hidden="true"></i>
                 </div>
                 <div class="step-body">
-                  <h3>Add the Chrome extension</h3>
-                  <ol class="setup-instructions">
-                    <li>Open <code>chrome://extensions</code>.</li>
-                    <li>Turn on Developer mode at the top right.</li>
-                    <li>Click Open extension folder below and copy the folder path from the file manager’s address bar.</li>
-                    <li>In Chrome, click Load unpacked, paste the copied folder path and select that folder.</li>
-                  </ol>
-                  <p>The extension pairs with this app automatically — there is no code to type.</p>
+                  <h3>Sign in to the built-in ChatGPT browser</h3>
+                  <p>Chat On Steroids now hosts ChatGPT in its own persistent Chromium session. The companion is bundled and loads automatically; there is no browser extension to install or external browser profile to choose.</p>
                   <p class="hint is-required">
-                    <strong>Required for sub-agents:</strong> the companion extension must be loaded
-                    and connected in ChatGPT. Without it, Chat On Steroids cannot identify, open or
-                    coordinate worker chats.
+                    <strong>Required for sub-agents:</strong> open the ChatGPT browser from View, sign in once, and leave the companion connected. Background chats stay inside the app even when this panel is hidden.
                   </p>
                   <div class="step-actions">
-                    <button class="btn btn-solid" id="bridgeFolder" type="button">
-                      <i class="ico ph ph-folder" aria-hidden="true"></i>Open extension folder
-                    </button>
-                    <button class="btn" id="bridgeDownload" type="button">
-                      <i class="ico ph ph-arrow-square-out" aria-hidden="true"></i>Download extension ZIP
-                    </button>
                     <button class="btn" id="bridgeUnpair" type="button">Disconnect browser</button>
                     <span class="chosen" id="bridgeState"></span>
                   </div>
-                  <p class="hint" id="extensionPath"></p>
                 </div>
               </li>
             </ol>
@@ -820,7 +798,7 @@
                   <div class="setting">
                     <span class="setting-text">
                       <b>Sub-agent workers</b>
-                      <em>Requires the Chrome extension to be loaded and connected. This sets the most worker chats one run may open.</em>
+                      <em>The built-in browser companion coordinates worker chats. This sets the most worker chats one run may open.</em>
                     </span>
                     <input id="maWorkers" class="num" type="number" min="1" max="8" step="1" />
                     <span class="unit">max</span>
@@ -856,8 +834,8 @@
                   </div>
                 <header class="settings-section-head automation-section-head"><div><h2 class="settings-section-title">Browser &amp; history</h2><p>Manage background tabs, browser preferences, and history compaction.</p></div></header>
                 <div class="settings-surface pane">
-                  <label class="setting"><span class="setting-text"><b>ChatGPT browser</b><em>Used when the app launches a browser. Install the companion and sign in to ChatGPT in this browser's active profile. Already connected tabs stay in their browser.</em></span><select id="chatBrowser"><option value="chrome">Google Chrome / Chromium</option><option value="edge">Microsoft Edge</option><option value="brave">Brave Browser</option></select></label>
-                  <label class="setting"><span class="setting-text"><b>Background chats</b><em>Keep app-created ChatGPT tabs in the background.</em></span><input id="backgroundChats" type="checkbox" /></label>
+                  <div class="setting"><span class="setting-text"><b>ChatGPT browser</b><em>Runs inside Chat On Steroids using a persistent Chromium profile. Open or hide it from View; hiding never stops active chats.</em></span><span class="pill">Built in</span></div>
+                  <label class="setting"><span class="setting-text"><b>Background chats</b><em>Keep app-created ChatGPT tabs hidden until you choose to view them.</em></span><input id="backgroundChats" type="checkbox" /></label>
                   <label class="setting"><span class="setting-text"><b>Automatic plugin refresh</b><em>Let the companion refresh changed connector tools in ChatGPT. Off by default; manual refresh remains available in ChatGPT.</em></span><input id="autoRefreshPlugins" type="checkbox" /></label>
                   <label class="setting"><span class="setting-text"><b>Browser only</b><em>Do not open tabs for automatic plugin refresh or chat recovery. Explicit new chats, workers and Reload models still work.</em></span><input id="browserOnly" type="checkbox" /></label>
                   <p class="muted">Idle app-created tabs close after two minutes. Sleeping worker tabs can close earlier when the worker limit is exceeded. Active turns and unsent drafts stay open.</p>

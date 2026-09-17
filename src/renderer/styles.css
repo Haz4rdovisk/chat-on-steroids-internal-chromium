@@ -406,17 +406,17 @@ code {
    Only the workspace grows; showing a notice must not create an implicit content row. */
 .app {
   height: 100%; display: grid;
-  /* sidebar-resize.ts owns the 50vw/480px clamp, leaving two compatible
-     length tracks here so Chromium can interpolate routine toggles. */
-  grid-template-columns: minmax(0, var(--sidebar-width, var(--sidebar-default, 248px))) minmax(0, 1fr);
+  /* Internal Chromium owns the first track, the navigation sidebar the second,
+     and the workspace the third. Compatible length tracks keep toggles interpolable. */
+  grid-template-columns: minmax(0, 0px) minmax(0, min(var(--sidebar-width, var(--sidebar-default, 248px)), 50vw)) minmax(0, 1fr);
   grid-template-rows: auto auto auto minmax(0, 1fr) minmax(0, 0px);
   background: var(--page);
   transition: grid-template-columns 220ms cubic-bezier(.16, 1, .3, 1), grid-template-rows 220ms cubic-bezier(.16, 1, .3, 1);
 }
-.app > header { grid-column: 2; grid-row: 2; }
-.app > .notices { grid-column: 2; grid-row: 3; min-width: 0; }
+.app > header { grid-column: 3; grid-row: 2; }
+.app > .notices { grid-column: 3; grid-row: 3; min-width: 0; }
 .app[data-screen='settings'] #pluginRefreshReminder { display: none; }
-.app > main { grid-column: 2; grid-row: 4; min-width: 0; }
+.app > main { grid-column: 3; grid-row: 4; min-width: 0; }
 /* One static wash behind the chat, reduced to 20% of its previous contrast. */
 :root[data-theme='dark'] .app[data-screen='chat'] {
   background: radial-gradient(ellipse at 12% 38%,
@@ -426,19 +426,120 @@ code {
 :root[data-theme='dark'] .app[data-screen='chat'] .card.is-session { background: transparent; }
 .app-topbar { position: relative; z-index: 130; grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; gap: 6px; height: env(titlebar-area-height, 28px); padding: 0 10px; padding-right: max(10px, calc(100vw - env(titlebar-area-width, 100vw))); background: var(--page); -webkit-app-region: drag; }
 
-.app-topbar > .btn, .view-menu { -webkit-app-region: no-drag; height: 100%; }
+.app-topbar > .btn { -webkit-app-region: no-drag; height: 100%; }
 .app-topbar > .btn { padding: 0 5px; }
 .app-topbar > .btn .ico { width: 14px; height: 14px; }
-.view-menu { position: relative; font-size: calc(12px * var(--text-scale, 1)); }
-.view-menu > summary { display: flex; align-items: center; height: 100%; list-style: none; cursor: pointer; padding: 0 9px; border-radius: 6px; }
-.view-menu > summary:hover, .view-menu[open] > summary { background: var(--hover); }
-.view-menu-items { position: absolute; top: calc(100% + 5px); left: 0; z-index: 100; width: 260px; padding: 6px; background: var(--card); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 8px 28px #0003; }
-.view-menu-items .btn { display: flex; width: 100%; gap: 10px; padding: 9px 10px; border-radius: 5px; }
-.view-menu-items kbd { margin-left: auto; color: var(--soft); font: inherit; }
-.view-menu-items hr { border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
-.app.is-sidebar-collapsed { grid-template-columns: minmax(0, 0px) minmax(0, 1fr); }
-.app.is-resizing-sidebar { transition: none; }
-.sidebar { position: relative; grid-column: 1; grid-row: 2 / -1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--sunk); border-right: 1px solid transparent; padding: 20px 12px 10px; clip-path: inset(0 -8px 0 0); transition: clip-path 220ms cubic-bezier(.16, 1, .3, 1), opacity 170ms ease-out, transform 220ms cubic-bezier(.16, 1, .3, 1), visibility 0s; }
+.view-menu-trigger { width: 30px; justify-content: center; border-radius: var(--r-xs); color: var(--soft); }
+.view-menu-trigger:hover, .view-menu-trigger[aria-expanded='true'] { background: var(--hover); color: var(--ink); }
+.app.is-sidebar-collapsed { grid-template-columns: minmax(0, 0px) minmax(0, 0px) minmax(0, 1fr); }
+.app.browser-dock-open {
+  grid-template-columns: minmax(0, var(--browser-dock-width, clamp(320px, 36vw, 720px))) minmax(0, min(var(--sidebar-width, var(--sidebar-default, 248px)), 38vw)) minmax(0, 1fr);
+}
+.app.browser-dock-open.is-sidebar-collapsed {
+  grid-template-columns: minmax(0, var(--browser-dock-width, clamp(320px, 36vw, 720px))) minmax(0, 0px) minmax(0, 1fr);
+}
+.app.is-resizing-sidebar, .app.is-resizing-browser-dock { transition: none; }
+.browser-dock {
+  position: relative;
+  z-index: 6;
+  grid-column: 1;
+  grid-row: 2 / -1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr);
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--page);
+}
+.browser-dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+.browser-dock-tabs::-webkit-scrollbar { display: none; }
+.browser-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 1 190px;
+  min-width: 84px;
+  max-width: 210px;
+  height: 29px;
+  padding: 0 6px 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--soft);
+  font-size: calc(11px * var(--text-scale, 1));
+  cursor: default;
+}
+.browser-tab:hover { background: var(--hover); color: var(--ink); }
+.browser-tab[aria-selected='true'] { border-color: var(--line); background: var(--card); color: var(--ink); }
+.browser-tab.is-loading::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: browser-tab-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes browser-tab-pulse { to { opacity: .35; } }
+.browser-tab-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-tab-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  font: 16px/1 system-ui, sans-serif;
+  cursor: pointer;
+  opacity: .15;
+}
+.browser-tab:hover .browser-tab-close,
+.browser-tab[aria-selected='true'] .browser-tab-close,
+.browser-tab-close:focus-visible { opacity: 1; }
+.browser-tab-close:hover { background: var(--hover); color: var(--ink); }
+.browser-dock-slot { min-width: 0; min-height: 0; background: var(--page); }
+.browser-dock-resize {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.browser-dock-resize:hover,
+.browser-dock-resize:focus-visible,
+.app.is-resizing-browser-dock .browser-dock-resize {
+  background: linear-gradient(var(--accent-edge), var(--accent-edge)) center / 1px 100% no-repeat;
+  outline: none;
+}
+.app.is-resizing-browser-dock,
+.app.is-resizing-browser-dock * { cursor: col-resize !important; user-select: none !important; }
+@media (max-width: 900px) {
+  .app.browser-dock-open {
+    grid-template-columns: minmax(0, var(--browser-dock-width, clamp(280px, 42vw, 440px))) minmax(0, min(var(--sidebar-width, var(--sidebar-default, 205px)), 30vw)) minmax(0, 1fr);
+  }
+  .app.browser-dock-open.is-sidebar-collapsed {
+    grid-template-columns: minmax(0, var(--browser-dock-width, clamp(280px, 42vw, 440px))) minmax(0, 0px) minmax(0, 1fr);
+  }
+}
+.sidebar { position: relative; grid-column: 2; grid-row: 2 / -1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--sunk); border-right: 1px solid transparent; padding: 20px 12px 10px; clip-path: inset(0 -8px 0 0); transition: clip-path 220ms cubic-bezier(.16, 1, .3, 1), opacity 170ms ease-out, transform 220ms cubic-bezier(.16, 1, .3, 1), visibility 0s; }
 .app.is-sidebar-collapsed .sidebar { clip-path: inset(0 100% 0 0); opacity: 0; transform: translateX(-14px); visibility: hidden; pointer-events: none; transition: clip-path 180ms ease-in, opacity 150ms ease-in, transform 180ms ease-in, visibility 0s 180ms; }
 /* Round the workspace edge without clipping header menus or changing the grid. */
 .sidebar::before, .sidebar::after { content: ''; position: absolute; left: calc(100% + 1px); top: 0; pointer-events: none; z-index: 4; }
@@ -3388,7 +3489,7 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 .sess.sort-after::after { bottom: -2px; }
 
 /* Right-side work panes. Files and Sub-agents are mutually exclusive projections of the
-   current task. */
+   current task; the ChatGPT browser is a separate shell-owned split on the far left. */
 [data-panel='chat'].has-agent-panel,
 [data-panel='chat'].has-file-panel { grid-template-columns: minmax(0, 1fr) var(--work-panel-width, minmax(340px, 42%)); }
 .is-resizing-work-panel { transition: none; }
@@ -3635,7 +3736,7 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 .composer-skills-row > #composerAddSkill .ico { width: 15px; height: 15px; }
 
 .app.has-terminal { grid-template-rows: auto auto auto minmax(0, 1fr) minmax(0, var(--terminal-height, 250px)); }
-.workspace-terminal { grid-column: 2; grid-row: 5; position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: clip; border-top: 1px solid var(--line); background: var(--page); }
+.workspace-terminal { grid-column: 3; grid-row: 5; position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: clip; border-top: 1px solid var(--line); background: var(--page); }
 .workspace-terminal[hidden] { display: none; }
 /* Logical hiding is immediate; keep the outgoing surface painted only for its short exit. */
 :is(.agent-panel, .file-panel, .workspace-terminal)[hidden].is-closing { display: flex !important; }

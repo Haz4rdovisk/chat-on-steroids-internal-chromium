@@ -15,7 +15,7 @@ import { flushLogBeforeExit, initLogFile, logError, logInfo, logWarn, snapshotLo
 import { unifiedExecManager } from './codex/manager.js';
 import { initSecretsPath } from './secrets.js';
 import { pluginManager } from './plugins/manager.js';
-import { setBrowserOpener, setBrowserWorkArea, shutdownBridge, startBridge } from './bridge.js';
+import { setBrowserHostHandler, setBrowserOpener, setBrowserWorkArea, shutdownBridge, startBridge } from './bridge.js';
 import { flushSessions, initSessionStore } from './session/store.js';
 import { initSkillsPath } from './skills.js';
 import { initPetLibrary } from './pet-library.js';
@@ -68,7 +68,15 @@ import {
 import { runShutdownSequence } from './shutdown.js';
 import { applyStagedUpdate, startUpdateChecks } from './update.js';
 import { UI_BASE_ZOOM, windowLayoutForWorkArea, titleBarOverlayForTheme, windowBackgroundForTheme } from './window-layout.js';
-import { openInPreferredBrowser } from './browser.js';
+import {
+  attachInternalBrowserWindow,
+  ensureInternalBrowserReady,
+  handleInternalBrowserHostRequest,
+  isInternalBrowserSession,
+  openInternalBrowserUrl,
+  prewarmInternalBrowser,
+  shutdownInternalBrowser
+} from './internal-browser.js';
 import {
   applyLoginStartup,
   isBackgroundLaunch,
@@ -81,6 +89,7 @@ import {
 import { trayGuidArgsForPlatform, trayImageSpec } from './tray-image.js';
 import { browserWindowIconPath } from './window-icon.js';
 import { editContextMenuTemplate } from './edit-context-menu.js';
+import { attachViewMenuWindow, shutdownViewMenu } from './view-menu.js';
 
 /** Durable state file holding the multi-agent run. Hashes only, never credentials. */
 const SWARM_STATE = 'swarm';
@@ -131,6 +140,8 @@ function createWindow(): void {
       webSecurity: true
     }
   });
+  attachInternalBrowserWindow(window);
+  attachViewMenuWindow(window);
 
   if (process.platform === 'win32') window.removeMenu();
 
@@ -347,20 +358,14 @@ void app.whenReady().then(async () => {
   // decides whether a previous run has been abandoned partly from which ChatGPT tabs are
   // open, and without this it can only answer "I cannot see" — which it treats, on
   // purpose, as a reason to leave the existing run alone.
-  // How a fresh chat opens when no browser can be asked to open it. The app asks the OS for
-  // the ChatGPT URL, which launches the browser if it is closed and creates the tab if there
-  // is none — the two cases the old "wait for a ChatGPT tab to poll us" delivery could never
-  // handle. Wired before any restored command is delivered, so a resume queued yesterday opens
-  // as soon as the bridge starts rather than waiting for the user to visit ChatGPT.
-  //
-  // It is deliberately not how a page-driven Compact & Resume opens chat B. The OS resolves a
-  // URL to whichever browser instance last had focus, which is a different window — and can be
-  // a browser without this extension in it — from the one holding chat A. That decision belongs
-  // to the browser that owns the source chat; see bridge.ts::offerPlacement.
+  // App-owned ChatGPT work never escapes into a personal Chrome/Edge/Brave profile. The
+  // persistent internal Chromium session owns the page while the companion remains the
+  // higher-level document/command authority.
   setBrowserOpener(async (url) => {
-    // Let the command owner report launch failure; another browser may belong to another account.
-    await openInPreferredBrowser(url);
+    const background = getConfig().ui.backgroundChats === true;
+    await openInternalBrowserUrl(url, { active: !background, reveal: !background });
   });
+  setBrowserHostHandler(handleInternalBrowserHostRequest);
 
   // Persistence is a process-lifetime dependency of the broker, not a feature-toggle
   // dependency. Multi-agent can be enabled from Settings without restarting the process;
@@ -428,6 +433,18 @@ void app.whenReady().then(async () => {
       app.quit();
     }
   );
+
+  // Browser lifetime starts with the app, not with the dock. Start the bridge first so the
+  // bundled companion can pair from the prewarmed hidden page, then keep that document mounted
+  // offscreen until the user explicitly asks to see it.
+  const bridgeStartup = browserExtensionRequired(getConfig()) ? startBridge() : Promise.resolve(null);
+  try {
+    await ensureInternalBrowserReady();
+    await bridgeStartup;
+    await prewarmInternalBrowser();
+  } catch (error) {
+    logWarn(`internal browser startup: ${error instanceof Error ? error.message : String(error)}`);
+  }
   windowActivation.enable();
   if (!isBackgroundLaunch(process.argv)) windowActivation.request();
   // Normal launches keep the main BrowserWindow first; background launches can still host pets
@@ -450,11 +467,6 @@ void app.whenReady().then(async () => {
   // traffic, so never make startup/reload wait behind years of old session history.
   queueDeterministicAttributionRepair();
 
-  // Recording, workers and direct browser tools share one extension transport.
-  // ipc.ts uses the same eligibility rule when settings change.
-  if (browserExtensionRequired(getConfig())) {
-    void startBridge();
-  }
   if (getConfig().ui.autoConnect) void connect();
 
   // Never awaited: an unreachable GitHub, a slow download or a broken release must not delay a
@@ -510,7 +522,7 @@ app.on('will-quit', (event) => {
       {
         name: 'process cleanup',
         budgetMs: 15_000,
-        run: () => [unifiedExecManager.terminateAllProcesses(), stopComputerHelper(), shutdownPetOverlay(), pluginManager.close()]
+        run: () => [unifiedExecManager.terminateAllProcesses(), stopComputerHelper(), shutdownPetOverlay(), shutdownViewMenu(), shutdownInternalBrowser(), pluginManager.close()]
       },
       // Phase 3: recorder work can enqueue both session projections and named durable state.
       { name: 'recorder flush', budgetMs: 10_000, run: () => [flushRecorder()] },
@@ -543,6 +555,9 @@ app.on('will-quit', (event) => {
 // Belt and braces: no web contents anywhere in this app may open a window or
 // navigate. External links go through the vetted allowlist in ipc.ts instead.
 app.on('web-contents-created', (_event, contents) => {
+  // The shell is locked to local content. Only the exact persistent ChatGPT partition may
+  // navigate remotely; never generalize this to arbitrary non-default sessions.
+  if (isInternalBrowserSession(contents.session)) return;
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
   contents.on('will-navigate', (event) => event.preventDefault());
   contents.on('will-redirect', (event) => event.preventDefault());

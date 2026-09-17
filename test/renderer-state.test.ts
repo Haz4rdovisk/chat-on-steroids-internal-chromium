@@ -762,18 +762,15 @@ it('saves a custom deployment id and returns to the known OpenRouter model', asy
   expect(mounted.calls[2].goal).toMatchObject({ provider: { kind: 'openrouter' }, model: 'deepseek/deepseek-v4-flash' });
 });
 
-it('saves the ChatGPT browser choice from its settings control and restores it on state push', async () => {
+it('keeps legacy ChatGPT browser config without exposing an external-browser selector', async () => {
   const mounted = await mountChat();
   const w = mounted.window;
-  const browser = w.document.getElementById('chatBrowser') as HTMLSelectElement;
-  expect(browser.value).toBe('chrome'); // older config has no field
-  browser.value = 'edge';
-  browser.dispatchEvent(new w.Event('change', { bubbles: true }));
+  expect(w.document.getElementById('chatBrowser')).toBeNull();
+  const background = w.document.getElementById('backgroundChats') as HTMLInputElement;
+  background.checked = !background.checked;
+  background.dispatchEvent(new w.Event('change', { bubbles: true }));
   await vi.waitFor(() => expect(mounted.calls).toHaveLength(1));
-  expect(mounted.calls[0].ui.chatBrowser).toBe('edge');
-  expect(browser.value).toBe('edge');
-  mounted.push({ ...mounted.state, config: { ...mounted.state.config, ui: { ...mounted.state.config.ui, chatBrowser: 'chrome' } } });
-  expect(browser.value).toBe('chrome');
+  expect(mounted.calls[0].ui.chatBrowser).toBe(mounted.state.config.ui.chatBrowser);
 });
 
 it('shows the current host Desktop tools without rebuilding permission controls on state pushes', async () => {

@@ -64,6 +64,8 @@ import {
   type AppState,
   type Config
 } from '../shared/types.js';
+import type { InternalBrowserBounds } from '../shared/internal-browser.js';
+import type { ViewMenuToggleRequest } from '../shared/view-menu.js';
 import { MAX_GOAL_SYSTEM_PROMPT_CHARS } from '../shared/goal.js';
 import { applySettings, connect, disconnect, getStatus, onStatusChange } from './connection.js';
 import { effectiveCapabilities, getConfig, updateConfig, MAX_MCP_INSTRUCTIONS_CHARS } from './config.js';
@@ -122,7 +124,16 @@ import {
 import { tokenPressure } from '../shared/session.js';
 import { forgetWorkspaceRoot, renameWorkspaceRoot } from './workspace.js';
 import { hostPlatformInfo } from './platform.js';
-import { openInPreferredBrowser } from './browser.js';
+import {
+  closeInternalBrowserTab,
+  hideInternalBrowserDock,
+  internalBrowserDockState,
+  layoutInternalBrowserDock,
+  openInternalBrowserUrl,
+  selectInternalBrowserTab,
+  showInternalBrowserDock
+} from './internal-browser.js';
+import { toggleViewMenu } from './view-menu.js';
 import { markInstallOnQuit, onUpdateChange, updateStatus } from './update.js';
 import {
   getMacOSDesktopAccess,
@@ -1083,6 +1094,70 @@ export function registerIpc(getWindow: () => BrowserWindow | null, quitToInstall
     return factor;
   });
 
+  handle('viewMenu:toggle', async payload => {
+    const request = z.object({
+      anchor: z.object({
+        x: z.number().finite().min(0).max(100_000),
+        y: z.number().finite().min(0).max(100_000),
+        width: z.number().finite().positive().max(10_000),
+        height: z.number().finite().positive().max(10_000)
+      }).strict(),
+      snapshot: z.object({
+        browserOpen: z.boolean(),
+        petVisible: z.boolean(),
+        petReady: z.boolean(),
+        sidebarCollapsed: z.boolean(),
+        zoomPercent: z.number().int().min(50).max(250),
+        theme: z.enum(['dark', 'light']),
+        appearance: appearanceSchema.optional(),
+        language: z.enum(['en', 'es', 'zh-CN', 'zh-TW']),
+        labels: z.object({
+          browser: z.string().min(1).max(80),
+          pet: z.string().min(1).max(80),
+          sidebar: z.string().min(1).max(80),
+          zoomIn: z.string().min(1).max(80),
+          zoomOut: z.string().min(1).max(80),
+          actualSize: z.string().min(1).max(80)
+        }).strict()
+      }).strict()
+    }).strict().parse(payload) as ViewMenuToggleRequest;
+    return toggleViewMenu(request);
+  });
+
+  handle('browser:dock', async (payload) => {
+    const request = z.discriminatedUnion('action', [
+      z.object({ action: z.literal('query') }).strict(),
+      z.object({ action: z.literal('show'), bounds: z.object({
+        x: z.number().finite().min(0).max(100_000),
+        y: z.number().finite().min(0).max(100_000),
+        width: z.number().finite().positive().max(100_000),
+        height: z.number().finite().positive().max(100_000)
+      }).strict() }).strict(),
+      z.object({ action: z.literal('layout'), bounds: z.object({
+        x: z.number().finite().min(0).max(100_000),
+        y: z.number().finite().min(0).max(100_000),
+        width: z.number().finite().positive().max(100_000),
+        height: z.number().finite().positive().max(100_000)
+      }).strict() }).strict(),
+      z.object({ action: z.literal('hide') }).strict(),
+      z.object({ action: z.literal('select'), tabId: z.number().int().positive() }).strict(),
+      z.object({ action: z.literal('close'), tabId: z.number().int().positive() }).strict()
+    ]).parse(payload);
+    if (request.action === 'query') return internalBrowserDockState();
+    if (request.action === 'hide') return hideInternalBrowserDock();
+    if (request.action === 'select') return selectInternalBrowserTab(request.tabId);
+    if (request.action === 'close') return closeInternalBrowserTab(request.tabId);
+    const win = getWindow();
+    const zoom = win?.webContents.getZoomFactor() ?? UI_BASE_ZOOM;
+    const bounds: InternalBrowserBounds = {
+      x: Math.round(request.bounds.x * zoom),
+      y: Math.round(request.bounds.y * zoom),
+      width: Math.max(1, Math.round(request.bounds.width * zoom)),
+      height: Math.max(1, Math.round(request.bounds.height * zoom))
+    };
+    return request.action === 'show' ? showInternalBrowserDock(bounds) : layoutInternalBrowserDock(bounds);
+  });
+
   handle('sessions:openChat', async (payload) => {
     const { id } = sessionIdArg.parse(payload);
     const summary = await getSession(id);
@@ -1090,7 +1165,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null, quitToInstall
     if (!conversationId || !/^[0-9a-z-]{8,64}$/i.test(conversationId)) {
       throw new Error('This session has no valid ChatGPT conversation');
     }
-    await openInPreferredBrowser(chatUrl(conversationId));
+    await openInternalBrowserUrl(chatUrl(conversationId), { active: true, reveal: true, retain: true });
     return true;
   });
 
