@@ -2322,7 +2322,7 @@ async function applyRequestedBrowserPreferences(request) {
       if (typeof request.patch.durations === 'boolean') patch.showStreamTimes = request.patch.durations;
       if (Object.keys(patch).length) await chrome.storage.local.set(patch);
       const actual = await chrome.storage.local.get(['renderStreamEnabled', 'showStreamTimes']);
-      receipt = { nonce: request.nonce, values: { overwrite: actual.renderStreamEnabled !== false, durations: actual.showStreamTimes === true } };
+      receipt = { nonce: request.nonce, values: { overwrite: actual.renderStreamEnabled === true, durations: actual.showStreamTimes === true } };
       await chrome.storage.session.set({ [key]: receipt });
       if (request.patch.overwrite === true) await HANDLERS.overwriteNow();
     } catch {
@@ -3624,7 +3624,7 @@ async function companionDiagnosticSnapshot(found) {
         ? { error: String(pairingError.error || ''), message: String(pairingError.message || '') }
         : null
     },
-    preferences: { overwrite: preferences[RENDER_STREAM_KEY] !== false, durations: preferences[SHOW_TIMES_KEY] === true },
+    preferences: { overwrite: preferences[RENDER_STREAM_KEY] === true, durations: preferences[SHOW_TIMES_KEY] === true },
     tab: await HANDLERS.tabStatus()
   };
 }

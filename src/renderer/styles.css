@@ -474,10 +474,10 @@ code {
 .connection-advanced-grid dt { color: var(--faint); }
 .connection-advanced-grid dd { margin: 0 0 6px; color: var(--soft); font-family: var(--mono); overflow-wrap: anywhere; }
 .connection-advanced-grid dd.is-bad { color: var(--red); }
-.connection-advanced-actions { display: grid; grid-template-columns: 1fr; gap: 7px; }
-.connection-advanced-actions .btn { min-height: 30px; justify-content: center; font-size: calc(10.5px * var(--text-scale, 1)); }
 .connection-popover-actions { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 7px; }
 .connection-popover-actions .btn { min-height: 26px; justify-content: center; padding: 4px 8px; background: transparent; font-size: calc(11.5px * var(--text-scale, 1)); }
+.connection-popover:not(:has(.connection-advanced[open])) .connection-advanced-action { display: none; }
+.connection-popover:has(.connection-advanced[open]) .connection-popover-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ------------------------------------------------------------------ header */

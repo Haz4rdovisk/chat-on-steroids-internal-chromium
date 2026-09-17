@@ -105,18 +105,16 @@
   const STALL_MS = 10 * 60 * 1000;
   /** How long the button says "Starting…" before believing something went wrong. */
   const PRESS_GRACE_MS = 12_000;
-  /** Persistent popup preference. On by default as of 1.7.4; the popup can turn it off. */
+  /** Persistent popup preference. Off unless the user explicitly enables it. */
   const RENDER_STREAM_KEY = 'renderStreamEnabled';
   /** Timestamps are useful for debugging, but too noisy for the normal transcript. */
   const SHOW_TIMES_KEY = 'showStreamTimes';
   /**
-   * Production now starts with transcript overwrite enabled. Tests deliberately start off
-   * and opt in case-by-case so renderer regressions do not contaminate unrelated capture
-   * tests. The storage preference is loaded before the first production paint, avoiding a
-   * one-frame flash when somebody has explicitly switched Overwrite off.
+   * Transcript overwrite is opt-in. Production and tests both start off; a stored true value
+   * enables it before the first production paint so there is no one-frame mismatch.
    */
   const TEST_MODE = typeof globalThis.CLF_TEST_HOOK === 'function';
-  let RENDER_STREAM = TEST_MODE ? false : true;
+  let RENDER_STREAM = false;
   let SHOW_TIMES = false;
   let renderPreferenceReady = TEST_MODE;
   const renderStreamAllowed = () => RENDER_STREAM && renderPreferenceReady;
@@ -156,7 +154,7 @@
       SHOW_TIMES = stored[SHOW_TIMES_KEY] === true;
     } catch {
       // A storage failure must not leave the renderer permanently waiting. The explicit
-      // production default is ON; the popup can write the preference again on its next use.
+      // production default is OFF; the popup can write the preference again on its next use.
     }
     renderPreferenceReady = true;
   }
@@ -10525,7 +10523,7 @@
       let changed = false;
       if (changes[RENDER_STREAM_KEY]) {
         const value = changes[RENDER_STREAM_KEY].newValue;
-        RENDER_STREAM = value !== false;
+        RENDER_STREAM = value === true;
         changed = true;
       }
       if (changes[SHOW_TIMES_KEY]) {
@@ -11254,7 +11252,7 @@
         return false;
       }
       if (message.type === 'clf-render-stream') {
-        RENDER_STREAM = message.enabled !== false;
+        RENDER_STREAM = message.enabled === true;
         renderPreferenceReady = true;
         paint();
         renderStreams();
@@ -11469,7 +11467,7 @@
       STALL_MS,
       GOAL_RETRY_MS,
       PRESENTATION_SCROLL_IDLE_MS,
-      /** Test-only: production defaults ON; tests opt into renderer cases explicitly. */
+      /** Test-only: production also defaults OFF; tests opt into renderer cases explicitly. */
       setRenderStream: (on) => {
         RENDER_STREAM = on === true;
         renderPreferenceReady = true;

@@ -636,7 +636,7 @@ it('renders companion diagnostics in the native Advanced connection drawer', asy
   expect(durations.checked).toBe(false);
   expect(overwrite.disabled).toBe(false);
   expect(durations.disabled).toBe(false);
-  expect((doc.getElementById('connectionRuntime') as HTMLDetailsElement).open).toBe(true);
+  expect((doc.getElementById('connectionRuntime') as HTMLDetailsElement).open).toBe(false);
 
   durations.checked = true;
   durations.dispatchEvent(new mounted.window.Event('change', { bubbles: true }));

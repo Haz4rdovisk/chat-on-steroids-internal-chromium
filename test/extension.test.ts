@@ -108,7 +108,7 @@ describe('extension release metadata', () => {
     expect(js).not.toMatch(/type: 'pair'[^}]*code/);
   });
 
-  it('ships Overwrite on by default and exposes one persistent toggle that refreshes immediately', async () => {
+  it('ships Overwrite off by default and exposes one persistent toggle that refreshes immediately', async () => {
     const dir = path.join(process.cwd(), 'extension');
     const [content, html, js] = await Promise.all([
       fs.readFile(path.join(dir, 'content.js'), 'utf8'),
@@ -117,8 +117,9 @@ describe('extension release metadata', () => {
     ]);
     expect(content).toContain("const RENDER_STREAM_KEY = 'renderStreamEnabled';");
     expect(content).toContain("const SHOW_TIMES_KEY = 'showStreamTimes';");
-    expect(content).toContain('let RENDER_STREAM = TEST_MODE ? false : true;');
+    expect(content).toContain('let RENDER_STREAM = false;');
     expect(html).toContain('id="overwriteToggle"');
+    expect(html).not.toContain('id="overwriteToggle" type="checkbox" checked');
     expect(html).toContain('id="timeToggle"');
     expect(html).toContain('type="checkbox"');
     expect(html).not.toContain('id="overwriteBtn"');

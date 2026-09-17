@@ -358,6 +358,7 @@ export interface ConnectionAdvancedController {
 
 export function initConnectionAdvanced(onLayoutChanged?: () => void): ConnectionAdvancedController {
   const details = $<HTMLDetailsElement>('connectionAdvanced');
+  const summary = details.querySelector<HTMLElement>('summary')!;
   const runtime = $<HTMLDetailsElement>('connectionRuntime');
   const refresh = $<HTMLButtonElement>('connectionAdvancedRefresh');
   const copy = $<HTMLButtonElement>('connectionAdvancedCopy');
@@ -445,10 +446,23 @@ export function initConnectionAdvanced(onLayoutChanged?: () => void): Connection
       if (response.ok && response.data) toast(t('Diagnostics copied'));
     });
   });
-  details.addEventListener('toggle', () => {
-    runtime.open = details.open;
+  // The native <details> toggle event is queued after the click. If we let the browser own
+  // that first state change, the 160px popover becomes 340px for one frame at its old x,
+  // then `toggle` moves it back around the anchor. Own the click instead so width + x settle
+  // in one task before Chromium paints anything.
+  summary.addEventListener('click', (event) => {
+    event.preventDefault();
+    const opening = !details.open;
+    details.open = opening;
+    if (opening) runtime.open = false;
     onLayoutChanged?.();
-    if (details.open) void request();
+  });
+  details.addEventListener('toggle', () => {
+    if (details.open) {
+      runtime.open = false;
+      void request();
+    }
+    onLayoutChanged?.();
   });
   window.setInterval(() => {
     if (details.open && (host || current) && !busy) paintDiagnosticAge(host, current);
