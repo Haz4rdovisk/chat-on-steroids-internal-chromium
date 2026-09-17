@@ -51,9 +51,21 @@ const fake = vi.hoisted(() => {
   class FakeBrowserWindow {
     destroyed = false;
     closed: (() => void) | null = null;
+    webListeners = new Map<string, Set<Listener>>();
     webContents = {
       send: vi.fn(),
-      getZoomFactor: vi.fn(() => 0.975)
+      getZoomFactor: vi.fn(() => 0.975),
+      on: vi.fn((name: string, listener: Listener) => {
+        const bucket = this.webListeners.get(name) ?? new Set<Listener>();
+        bucket.add(listener);
+        this.webListeners.set(name, bucket);
+      }),
+      off: vi.fn((name: string, listener: Listener) => {
+        this.webListeners.get(name)?.delete(listener);
+      }),
+      emit: (name: string, ...args: any[]): void => {
+        for (const listener of [...(this.webListeners.get(name) ?? [])]) listener(...args);
+      }
     };
     contentView = {
       children: [] as any[],
@@ -168,7 +180,58 @@ it('closes when focus moves to another native surface', async () => {
   await menu.toggleViewMenu({ anchor: { x: 40, y: 0, width: 30, height: 28 }, snapshot: snapshot() });
   const view = fake.views.at(-1)!;
   view.webContents.emit('blur');
+  await new Promise(resolve => setTimeout(resolve, 0));
   expect(menu.viewMenuState()).toEqual({ open: false });
   expect(view.setVisible).toHaveBeenLastCalledWith(false);
   expect(owner.webContents.send).toHaveBeenCalledWith('viewMenu:openChanged', false);
+});
+
+it('consumes the owner trigger press after native blur so the same click cannot reopen the menu', async () => {
+  const owner = new fake.FakeBrowserWindow() as any;
+  menu.attachViewMenuWindow(owner);
+  await menu.toggleViewMenu({ anchor: { x: 40, y: 0, width: 30, height: 28 }, snapshot: snapshot() });
+  const view = fake.views.at(-1)!;
+  const down = { preventDefault: vi.fn() };
+  const up = { preventDefault: vi.fn() };
+
+  // Native focus moves first. The generic blur close is deferred until the current input gesture
+  // finishes, allowing the owner WebContents to identify that the pointer is on the same trigger.
+  view.webContents.emit('blur');
+  owner.webContents.emit('before-mouse-event', down, {
+    type: 'mouseDown', button: 'left', x: 50, y: 10, globalX: 50, globalY: 10
+  });
+  expect(down.preventDefault).toHaveBeenCalledOnce();
+  expect(menu.viewMenuState()).toEqual({ open: false });
+
+  owner.webContents.emit('before-mouse-event', up, {
+    type: 'mouseUp', button: 'left', x: 50, y: 10, globalX: 50, globalY: 10
+  });
+  expect(up.preventDefault).toHaveBeenCalledOnce();
+  expect(owner.webContents.send).toHaveBeenCalledWith('viewMenu:openChanged', false);
+});
+
+it('does not let a missing trigger mouse-up suppress a later click elsewhere', async () => {
+  const owner = new fake.FakeBrowserWindow() as any;
+  menu.attachViewMenuWindow(owner);
+  await menu.toggleViewMenu({ anchor: { x: 40, y: 0, width: 30, height: 28 }, snapshot: snapshot() });
+  const triggerDown = { preventDefault: vi.fn() };
+  const laterDown = { preventDefault: vi.fn() };
+  const laterUp = { preventDefault: vi.fn() };
+
+  owner.webContents.emit('before-mouse-event', triggerDown, {
+    type: 'mouseDown', button: 'left', x: 50, y: 10, globalX: 50, globalY: 10
+  });
+  expect(triggerDown.preventDefault).toHaveBeenCalledOnce();
+  expect(menu.viewMenuState()).toEqual({ open: false });
+
+  // Model a lost matching mouse-up. The next new gesture must clear the stale suppression first,
+  // so neither half of that unrelated click is swallowed by the native menu owner.
+  owner.webContents.emit('before-mouse-event', laterDown, {
+    type: 'mouseDown', button: 'left', x: 300, y: 200, globalX: 300, globalY: 200
+  });
+  owner.webContents.emit('before-mouse-event', laterUp, {
+    type: 'mouseUp', button: 'left', x: 300, y: 200, globalX: 300, globalY: 200
+  });
+  expect(laterDown.preventDefault).not.toHaveBeenCalled();
+  expect(laterUp.preventDefault).not.toHaveBeenCalled();
 });

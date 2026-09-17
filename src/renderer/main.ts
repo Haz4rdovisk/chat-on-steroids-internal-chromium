@@ -259,15 +259,6 @@ function initViewMenuControls(
     };
   };
 
-  // When the native menu owns focus, pressing the trigger would normally blur that
-  // WebContentsView before this button's click fires. The blur closes the menu, then
-  // the click sees it closed and immediately reopens it. Preserve focus through the
-  // mouse-down only while the menu is already open; the following click remains the
-  // single toggle authority. Keyboard activation is unaffected.
-  trigger.addEventListener('mousedown', event => {
-    if (event.button === 0 && trigger.getAttribute('aria-expanded') === 'true') event.preventDefault();
-  });
-
   trigger.addEventListener('click', async () => {
     const rect = trigger.getBoundingClientRect();
     const reply = await api.toggleViewMenu({

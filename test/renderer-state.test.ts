@@ -649,21 +649,6 @@ it('renders companion diagnostics in the native Advanced connection drawer', asy
   expect(durations.checked).toBe(true);
 });
 
-it('keeps an open native View menu focused through trigger mousedown so the click can close it', async () => {
-  const mounted = await mountChat();
-  const trigger = mounted.window.document.getElementById('viewMenuToggle') as HTMLButtonElement;
-
-  trigger.setAttribute('aria-expanded', 'true');
-  const closingPress = new mounted.window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
-  expect(trigger.dispatchEvent(closingPress)).toBe(false);
-  expect(closingPress.defaultPrevented).toBe(true);
-
-  trigger.setAttribute('aria-expanded', 'false');
-  const openingPress = new mounted.window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
-  expect(trigger.dispatchEvent(openingPress)).toBe(true);
-  expect(openingPress.defaultPrevented).toBe(false);
-});
-
 it('always offers setup collapse and preserves the choice across incomplete status updates', async () => {
   const mounted = await mountChat();
   const doc = mounted.window.document;

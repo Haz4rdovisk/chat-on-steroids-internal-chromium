@@ -8,6 +8,7 @@
  */
 import path from 'node:path';
 import { BrowserWindow, ipcMain, WebContentsView } from 'electron';
+import type { Event as ElectronEvent, MouseInputEvent } from 'electron';
 import type { ViewMenuCommand, ViewMenuToggleRequest, ViewMenuToggleState } from '../shared/view-menu.js';
 
 const MENU_WIDTH = 272;
@@ -21,6 +22,10 @@ let menuView: WebContentsView | null = null;
 let loadPromise: Promise<void> | null = null;
 let open = false;
 let ipcRegistered = false;
+let blurCloseTimer: ReturnType<typeof setTimeout> | null = null;
+let ownerMouseListener: ((event: ElectronEvent, mouse: MouseInputEvent) => void) | null = null;
+let triggerBounds: { x: number; y: number; width: number; height: number } | null = null;
+let suppressTriggerMouseUp = false;
 
 function currentOwner(): BrowserWindow | null {
   return owner && !owner.isDestroyed() ? owner : null;
@@ -36,10 +41,84 @@ function announceOpen(next: boolean): void {
 }
 
 export function hideViewMenu(): ViewMenuToggleState {
+  if (blurCloseTimer) {
+    clearTimeout(blurCloseTimer);
+    blurCloseTimer = null;
+  }
   open = false;
+  triggerBounds = null;
   if (menuView && !menuView.webContents.isDestroyed()) menuView.setVisible(false);
   announceOpen(false);
   return { open: false };
+}
+
+function scheduleBlurClose(): void {
+  if (blurCloseTimer) clearTimeout(blurCloseTimer);
+  // Focus moves from the native menu to the shell before Chromium dispatches the shell's mouse
+  // event. Defer the generic blur close by one event-loop turn so the owner can recognize a
+  // press on the same three-dots trigger and consume that gesture natively. Clicks anywhere else
+  // still close the menu immediately after the current native input dispatch completes.
+  blurCloseTimer = setTimeout(() => {
+    blurCloseTimer = null;
+    if (open) hideViewMenu();
+  }, 0);
+}
+
+function pointInside(
+  point: { x: number; y: number },
+  bounds: { x: number; y: number; width: number; height: number }
+): boolean {
+  return point.x >= bounds.x && point.x < bounds.x + bounds.width
+    && point.y >= bounds.y && point.y < bounds.y + bounds.height;
+}
+
+function screenTriggerBounds(win: BrowserWindow, request: ViewMenuToggleRequest): { x: number; y: number; width: number; height: number } {
+  const zoom = win.webContents.getZoomFactor();
+  const content = win.getContentBounds();
+  return {
+    x: content.x + Math.round(request.anchor.x * zoom),
+    y: content.y + Math.round(request.anchor.y * zoom),
+    width: Math.max(1, Math.round(request.anchor.width * zoom)),
+    height: Math.max(1, Math.round(request.anchor.height * zoom))
+  };
+}
+
+function detachOwnerMouseListener(): void {
+  if (!owner || owner.isDestroyed() || !ownerMouseListener) {
+    ownerMouseListener = null;
+    return;
+  }
+  owner.webContents.off('before-mouse-event', ownerMouseListener);
+  ownerMouseListener = null;
+}
+
+function attachOwnerMouseListener(win: BrowserWindow): void {
+  const listener = (event: ElectronEvent, mouse: MouseInputEvent): void => {
+    if (suppressTriggerMouseUp && mouse.type === 'mouseUp' && mouse.button === 'left') {
+      event.preventDefault();
+      suppressTriggerMouseUp = false;
+      return;
+    }
+    // If Chromium never delivered the matching mouse-up (for example because the window lost
+    // capture mid-gesture), never let that stale suppression leak into a later click.
+    if (suppressTriggerMouseUp && mouse.type === 'mouseDown') suppressTriggerMouseUp = false;
+    if (!open || mouse.type !== 'mouseDown' || mouse.button !== 'left' || !triggerBounds) return;
+    const content = win.getContentBounds();
+    const point = mouse.globalX !== undefined && mouse.globalY !== undefined
+      ? { x: mouse.globalX, y: mouse.globalY }
+      : { x: content.x + mouse.x, y: content.y + mouse.y };
+    if (!pointInside(point, triggerBounds)) return;
+
+    // This is the same native gesture that moved focus away from the menu. Consume it before it
+    // reaches the shell renderer, close the menu here, and consume the matching mouse-up too. If
+    // the renderer saw this click it would call toggle after blur had already closed the menu and
+    // would therefore reopen it.
+    event.preventDefault();
+    suppressTriggerMouseUp = true;
+    hideViewMenu();
+  };
+  ownerMouseListener = listener;
+  win.webContents.on('before-mouse-event', listener);
 }
 
 function registerMenuIpc(): void {
@@ -77,7 +156,7 @@ async function ensureMenuView(): Promise<WebContentsView> {
   view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   view.webContents.on('will-navigate', event => event.preventDefault());
   view.webContents.on('will-redirect', event => event.preventDefault());
-  view.webContents.on('blur', () => { if (open) hideViewMenu(); });
+  view.webContents.on('blur', () => { if (open) scheduleBlurClose(); });
   view.webContents.once('destroyed', () => {
     if (menuView !== view) return;
     menuView = null;
@@ -114,6 +193,10 @@ export async function toggleViewMenu(request: ViewMenuToggleRequest): Promise<Vi
   if (open) return hideViewMenu();
   const win = currentOwner();
   if (!win) throw new Error('The app window is not available.');
+  if (blurCloseTimer) {
+    clearTimeout(blurCloseTimer);
+    blurCloseTimer = null;
+  }
   const view = await ensureMenuView();
   const bounds = menuBounds(win, request);
 
@@ -126,6 +209,7 @@ export async function toggleViewMenu(request: ViewMenuToggleRequest): Promise<Vi
   view.webContents.send('viewMenu:snapshot', request.snapshot);
   view.setVisible(true);
   open = true;
+  triggerBounds = screenTriggerBounds(win, request);
   announceOpen(true);
   view.webContents.focus();
   return { open: true };
@@ -135,6 +219,7 @@ export function attachViewMenuWindow(win: BrowserWindow): void {
   registerMenuIpc();
   if (owner === win) return;
   hideViewMenu();
+  detachOwnerMouseListener();
   if (owner && menuView && !owner.isDestroyed()) {
     try { owner.contentView.removeChildView(menuView); } catch { /* owner teardown */ }
   }
@@ -142,9 +227,13 @@ export function attachViewMenuWindow(win: BrowserWindow): void {
   menuView = null;
   loadPromise = null;
   owner = win;
+  attachOwnerMouseListener(win);
   win.once('closed', () => {
     if (owner !== win) return;
     open = false;
+    triggerBounds = null;
+    suppressTriggerMouseUp = false;
+    ownerMouseListener = null;
     if (menuView && !menuView.webContents.isDestroyed()) menuView.webContents.close();
     menuView = null;
     loadPromise = null;
@@ -158,6 +247,7 @@ export function viewMenuState(): ViewMenuToggleState {
 
 export async function shutdownViewMenu(): Promise<void> {
   hideViewMenu();
+  suppressTriggerMouseUp = false;
   const view = menuView;
   menuView = null;
   loadPromise = null;
@@ -168,5 +258,6 @@ export async function shutdownViewMenu(): Promise<void> {
     }
     view.webContents.close();
   }
+  detachOwnerMouseListener();
   owner = null;
 }
