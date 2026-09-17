@@ -561,7 +561,7 @@ code {
 .browser-dock-resize:hover,
 .browser-dock-resize:focus-visible,
 .app.is-resizing-browser-dock .browser-dock-resize {
-  background: linear-gradient(var(--accent-edge), var(--accent-edge)) center / 1px 100% no-repeat;
+  background: linear-gradient(to bottom, transparent 18px, var(--accent-edge) 36px, transparent 88%) center / 1px 100% no-repeat;
   outline: none;
 }
 .app.is-resizing-browser-dock,
