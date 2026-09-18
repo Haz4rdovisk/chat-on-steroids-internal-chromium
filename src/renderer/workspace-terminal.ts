@@ -4,6 +4,7 @@ import '@xterm/xterm/css/xterm.css';
 import { el, icon, toast } from './dom.js';
 import { t, ui } from './i18n.js';
 import { onAppearanceChanged } from './appearance.js';
+import { hideSlidingPanel, showSlidingPanel } from './panel-motion.js';
 import type { LocalProject } from '../shared/projects.js';
 
 type Tab = { id: string; projectId: string; title: string; node: HTMLElement; term: Terminal; fit: FitAddon; ready: boolean; exited: boolean; queued: number; writes: Promise<void> };
@@ -52,7 +53,11 @@ export function createWorkspaceTerminal() {
     if (tab.ready && !tab.exited) void window.api.terminalResize(tab.id, Math.min(500, tab.term.cols), Math.min(200, tab.term.rows));
   };
   const setOpen = (value: boolean): void => {
-    open = value; panel.hidden = !value; app.classList.toggle('has-terminal', value);
+    if (open === value) return;
+    open = value;
+    if (value) showSlidingPanel(panel, 'up');
+    else hideSlidingPanel(panel, 'up');
+    app.classList.toggle('has-terminal', value);
     toggle.setAttribute('aria-expanded', String(value));
     if (value) requestAnimationFrame(() => { fit(); if (selected) tabs.get(selected)?.term.focus(); });
   };

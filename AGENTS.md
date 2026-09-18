@@ -2459,6 +2459,10 @@ Electron fixture, including simultaneous images, zoom, translated labels and nat
 The sidebar groups local projects/sessions, exposes worker state and retains deliberate width
 and expansion preferences. Project chat titles align with the project name. Groups initially
 start collapsed; a summary pointer/keyboard click commits its disclosure intent before a repaint.
+Shell panels preserve their spatial origin during routine toggles: Chats reveal from the left,
+Files and Sub-agents reveal from the right, and Terminal reveals upward. Stable grid tracks
+animate the workspace reflow instead of abruptly replacing layout. Reduced motion keeps all
+state changes immediate. Resizing never inherits toggle transitions.
 Activity repaints preserve the focused project summary without taking composer focus, and repeated
 activation of the already visible chat panel does not start another sidebar refresh.
 Selecting a project chat or project-scoped New Chat deliberately expands that group. An open

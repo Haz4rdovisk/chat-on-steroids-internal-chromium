@@ -6,6 +6,7 @@ import { marked } from 'marked';
 import { t, ui } from './i18n.js';
 import { disclosureChevron, el, icon, run, toast } from './dom.js';
 import { attachWorkPanelResize } from './work-panel-resize.js';
+import { hideSlidingPanel, showSlidingPanel } from './panel-motion.js';
 import type { ProjectCodeEditor } from './file-code-editor.js';
 import type { ProjectPdfViewer } from './file-pdf-viewer.js';
 
@@ -443,10 +444,10 @@ export function createFilePanel(options: FilePanelOptions) {
   window.addEventListener('resize', clampPreviewHeight);
   resetPreviewHeight();
 
-  function hide(): void {
+  function hide(instant = false): void {
     generation++;
     destroyPdfViewer();
-    pane.hidden = true;
+    hideSlidingPanel(pane, 'right', instant);
     options.host.classList.remove('has-file-panel');
     options.toggle.setAttribute('aria-expanded', 'false');
     syncWatches();
@@ -455,7 +456,7 @@ export function createFilePanel(options: FilePanelOptions) {
   async function show(): Promise<void> {
     if (!project) return;
     options.onShow?.();
-    pane.hidden = false;
+    if (pane.hidden) showSlidingPanel(pane, 'right');
     options.host.classList.add('has-file-panel');
     options.toggle.setAttribute('aria-expanded', 'true');
     if (!listings.has('')) await loadDirectory('');
@@ -1103,7 +1104,7 @@ export function createFilePanel(options: FilePanelOptions) {
       generation++;
       listings.clear(); expanded = new Set(['']); selection = { path: '', kind: 'root' };
       previewPath = null; previewValue = null;
-      if (!next) { hide(); render(); return; }
+      if (!next) { hide(true); render(); return; }
       render();
       if (!pane.hidden) void show();
     }

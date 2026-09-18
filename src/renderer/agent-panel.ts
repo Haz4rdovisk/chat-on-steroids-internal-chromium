@@ -2,6 +2,7 @@ import { ui, t } from './i18n.js';
 import type { SessionSummary, SessionEvent } from '../shared/session.js';
 import { el, icon } from './dom.js';
 import { attachWorkPanelResize } from './work-panel-resize.js';
+import { hideSlidingPanel, showSlidingPanel } from './panel-motion.js';
 
 /** A read-only second pane. Its selection never changes the main chat's composer. */
 export function createAgentPanel(options: {
@@ -24,13 +25,14 @@ export function createAgentPanel(options: {
   head.append(back, title); pane.append(head, body); options.host.append(pane);
   let parent: string | null = null, workers: SessionSummary[] = [], selected: string | null = null;
   let generation = 0;
-  function hide(): void {
-    generation++; pane.hidden = true; selected = null;
+  function hide(instant = false): void {
+    generation++; hideSlidingPanel(pane, 'right', instant); selected = null;
     options.host.classList.remove('has-agent-panel'); options.toggle.setAttribute('aria-expanded', 'false');
   }
   function show(): void {
     options.onShow?.();
-    pane.hidden = false; options.host.classList.add('has-agent-panel'); options.toggle.setAttribute('aria-expanded', 'true');
+    if (pane.hidden) showSlidingPanel(pane, 'right');
+    options.host.classList.add('has-agent-panel'); options.toggle.setAttribute('aria-expanded', 'true');
   }
   function list(): void {
     generation++; selected = null; head.hidden = true; body.replaceChildren();
@@ -77,7 +79,7 @@ export function createAgentPanel(options: {
     hide,
     open,
     update(id: string | null, next: SessionSummary[]): void {
-      if (parent !== id) { hide(); parent = id; }
+      if (parent !== id) { hide(true); parent = id; }
       const previous = workers.find(worker => worker.id === selected);
       workers = next; options.toggle.hidden = id === null;
       ui(options.toggle, 'title', () => t("Sub-agents · {0} recorded", [workers.length]));
