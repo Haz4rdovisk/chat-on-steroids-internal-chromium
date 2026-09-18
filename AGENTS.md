@@ -2546,6 +2546,13 @@ Permissions, Folders, Health and Activity: the approved-folder list has unbounde
 not displace or strand a neighboring column. Existing control IDs and main-process owners remain
 unchanged. `scripts/verify-workspace-ui.cjs` checks the order, shared width and overflow in real
 Chromium with both desktop and narrow viewports, including a long folder list.
+Usage Settings shares that canvas and one-column section rhythm: recorded summary, estimated
+daily token activity, editable comparison costs and independently reported ChatGPT balances.
+The summary and heatmap use local estimates, never provider billing; model/shared/feature
+remaining balances are only what ChatGPT reported. The 52-week grid and tables scroll within
+their own bounded surfaces on narrow windows, not across the Settings page.
+`scripts/verify-usage-ui.cjs` checks section geometry, summary reflow and local scrolling
+in real Chromium at desktop and narrow widths without reading user data.
 Settings places ChatGPT model defaults second and Workers & recovery third, after Continuation
 sources. Appearance has its own Settings navigation page, including the language selector and
 existing setup profiles. The connector-instructions editor

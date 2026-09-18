@@ -305,38 +305,68 @@
           </div>
         </section>
         <section class="panel usage-panel" data-panel="usage">
-          <div class="settings-heading"><span class="eyebrow">YOUR ACTIVITY</span><h1>Usage</h1><p>Model availability and the work recorded in this workspace.</p></div>
-          <p class="muted usage-status" id="usageStatus" role="status">Updating usage in the background. After an update, this can take a few minutes. You can keep using the app.</p><div class="usage-summary" id="usageSummary"></div>
-          <section class="usage-section"><h2>Token activity per day</h2><div id="usageHeatmap" class="usage-heatmap"></div><p class="muted">Estimated context processed per tool call · last 52 weeks</p></section>
-          <section class="usage-section"><h2>Cost estimate per day</h2>
-            <details id="usageFormulaDetails"><summary>Edit cost formula</summary>
-            <p id="usageFormula" class="muted"></p>
-            <p class="muted">Automatic baselines use Standard short-context cached-input prices, checked 7 September 2026: <a href="https://developers.openai.com/api/docs/models/gpt-5.6-sol" target="_blank" rel="noopener noreferrer">GPT-5.6 Sol</a>, <a href="https://developers.openai.com/api/docs/models/gpt-5.6-terra" target="_blank" rel="noopener noreferrer">GPT-5.6 Terra</a>, <a href="https://developers.openai.com/api/docs/models/gpt-5.6-luna" target="_blank" rel="noopener noreferrer">GPT-5.6 Luna</a>, <a href="https://developers.openai.com/api/docs/models/gpt-6-astra" target="_blank" rel="noopener noreferrer">GPT-6 Astra</a>, <a href="https://developers.openai.com/api/docs/models/gpt-5.5" target="_blank" rel="noopener noreferrer">GPT-5.5</a>. These are editable cost comparisons, not actual bills.</p>
-            <label class="setting"><span class="setting-text"><b>Context times unique tool calls, divided by</b><em>Changes estimated tokens and costs.</em></span><input id="usageDivisor" aria-label="Usage token divisor" type="number" min="0.01" step="0.01" value="2" /></label>
-            <label class="setting"><span class="setting-text"><b>Cached-input cost multiplier</b><em>Applied after each model's cached-input rate.</em></span><input id="usageMultiplier" aria-label="Cached-input cost multiplier" type="number" min="0" step="0.01" value="1.2" /></label>
-            <div id="usageRates"></div></details>
-            <p id="usageCost" class="muted">Set per-model cached-input rates to compare costs.</p><div id="usageDays"></div>
-          </section>
-          <section class="usage-section"><h2>Remaining usage per model <button class="btn" id="refreshUsage" type="button">Refresh</button></h2><p class="muted">Reported by ChatGPT. Shared pools and feature quotas are listed separately. Missing data means not reported.</p><div id="modelUsage"></div></section>
+          <div class="settings-page-content usage-content">
+            <header class="settings-page-head">
+              <h1>Usage</h1>
+              <p>Model availability and the work recorded in this workspace.</p>
+            </header>
+            <div class="usage-status-line">
+              <i class="ico ph ph-info" aria-hidden="true"></i>
+              <p class="muted usage-status" id="usageStatus" role="status">Updating usage in the background. After an update, this can take a few minutes. You can keep using the app.</p>
+            </div>
+            <div class="settings-surface usage-summary" id="usageSummary"></div>
+            <div class="usage-sections">
+              <section class="settings-section usage-section">
+                <header class="settings-section-head">
+                  <div><h2>Token activity per day</h2><p>Estimated context processed per tool call · last 52 weeks</p></div>
+                </header>
+                <div class="settings-surface usage-heatmap-surface"><div id="usageHeatmap" class="usage-heatmap"></div></div>
+              </section>
+              <section class="settings-section usage-section">
+                <header class="settings-section-head"><div><h2>Cost estimate per day</h2></div></header>
+                <div class="settings-surface usage-cost-surface">
+                  <details id="usageFormulaDetails">
+                    <summary><span><i class="ico ph ph-sliders-horizontal" aria-hidden="true"></i>Edit cost formula</span><i class="ico ph ph-caret-down usage-formula-chevron" aria-hidden="true"></i></summary>
+                    <div class="usage-formula-body">
+                      <p id="usageFormula" class="muted"></p>
+                      <p class="muted">Automatic baselines use Standard short-context cached-input prices, checked 7 September 2026: <a href="https://developers.openai.com/api/docs/models/gpt-5.6-sol" target="_blank" rel="noopener noreferrer">GPT-5.6 Sol</a>, <a href="https://developers.openai.com/api/docs/models/gpt-5.6-terra" target="_blank" rel="noopener noreferrer">GPT-5.6 Terra</a>, <a href="https://developers.openai.com/api/docs/models/gpt-5.6-luna" target="_blank" rel="noopener noreferrer">GPT-5.6 Luna</a>, <a href="https://developers.openai.com/api/docs/models/gpt-6-astra" target="_blank" rel="noopener noreferrer">GPT-6 Astra</a>, <a href="https://developers.openai.com/api/docs/models/gpt-5.5" target="_blank" rel="noopener noreferrer">GPT-5.5</a>. These are editable cost comparisons, not actual bills.</p>
+                      <label class="setting"><span class="setting-text"><b>Context times unique tool calls, divided by</b><em>Changes estimated tokens and costs.</em></span><input id="usageDivisor" aria-label="Usage token divisor" type="number" min="0.01" step="0.01" value="2" /></label>
+                      <label class="setting"><span class="setting-text"><b>Cached-input cost multiplier</b><em>Applied after each model's cached-input rate.</em></span><input id="usageMultiplier" aria-label="Cached-input cost multiplier" type="number" min="0" step="0.01" value="1.2" /></label>
+                      <div id="usageRates"></div>
+                    </div>
+                  </details>
+                  <p id="usageCost" class="muted usage-cost-summary">Set per-model cached-input rates to compare costs.</p>
+                  <div id="usageDays" class="usage-table-stack"></div>
+                </div>
+              </section>
+              <section class="settings-section usage-section">
+                <header class="settings-section-head">
+                  <div><h2>Remaining usage per model</h2><p>Reported by ChatGPT. Shared pools and feature quotas are listed separately. Missing data means not reported.</p></div>
+                  <button class="btn" id="refreshUsage" type="button">Refresh</button>
+                </header>
+                <div class="settings-surface usage-limits" id="modelUsage"></div>
+              </section>
+            </div>
+          </div>
         </section>
         <!-- ============================================================ Home -->
         <section class="panel" data-panel="home">
-          <div class="workspace-content">
-            <header class="workspace-page-head">
+          <div class="settings-page-content workspace-content">
+            <header class="settings-page-head workspace-page-head">
               <h1>Workspace</h1>
               <p>Choose what ChatGPT can access and keep your connection healthy.</p>
             </header>
             <div class="workspace-layout">
               <div class="workspace-column">
                 <!-- ----------------------------------------------- permissions -->
-                <section class="workspace-section workspace-permissions">
-                  <header class="workspace-section-head">
+                <section class="settings-section workspace-section workspace-permissions">
+                  <header class="settings-section-head workspace-section-head">
                     <div><h2>Permissions</h2><p>Control which local capabilities ChatGPT can use.</p></div>
                     <button class="btn" id="readOnlyBtn" type="button">
                       <i class="ico ph ph-lock-key" aria-hidden="true"></i>Read-only
                     </button>
                   </header>
-                  <div class="workspace-surface scroll">
+                  <div class="settings-surface workspace-surface scroll">
                     <div id="groups"></div>
                     <div class="desktop-access" id="desktopAccess" hidden>
                       <strong id="desktopAccessTitle">Desktop access needs attention</strong>
@@ -359,8 +389,8 @@
                 </section>
 
                 <!-- -------------------------------------------------- activity -->
-                <section class="workspace-section workspace-activity">
-                  <header class="workspace-section-head">
+                <section class="settings-section workspace-section workspace-activity">
+                  <header class="settings-section-head workspace-section-head">
                     <div><h2>Activity</h2><p>Recent local events and failures.</p></div>
                     <span class="workspace-section-actions">
                       <span class="problems" id="homeProblems" hidden></span>
@@ -369,20 +399,20 @@
                       </button>
                     </span>
                   </header>
-                  <div class="workspace-surface scroll feed" id="homeFeed"></div>
+                  <div class="settings-surface workspace-surface scroll feed" id="homeFeed"></div>
                 </section>
               </div>
 
               <div class="workspace-column">
                 <!-- --------------------------------------------------- folders -->
-                <section class="workspace-section" id="foldersCard">
-                  <header class="workspace-section-head">
+                <section class="settings-section workspace-section" id="foldersCard">
+                  <header class="settings-section-head workspace-section-head">
                     <div><h2>Folders</h2><p>Approved locations available to local tools.</p></div>
                     <button class="btn" id="addFolder" type="button">
                       <i class="ico ph ph-plus" aria-hidden="true"></i>Add
                     </button>
                   </header>
-                  <div class="workspace-surface scroll">
+                  <div class="settings-surface workspace-surface scroll">
                     <div id="rootList"></div>
                     <p class="empty" id="rootsEmpty">
                       Nothing shared yet. Press Add or drop a folder here. ChatGPT sees short names
@@ -392,15 +422,15 @@
                 </section>
 
                 <!-- ---------------------------------------------------- health -->
-                <section class="workspace-section workspace-health">
-                  <header class="workspace-section-head">
+                <section class="settings-section workspace-section workspace-health">
+                  <header class="settings-section-head workspace-section-head">
                     <div><h2>Health</h2><p>Connection and runtime status.</p></div>
                     <button class="btn" id="runChecks" type="button">
                       <i class="ico ph ph-activity" aria-hidden="true"></i>
                       <span id="runChecksLabel">Run checks</span>
                     </button>
                   </header>
-                  <div class="workspace-surface scroll">
+                  <div class="settings-surface workspace-surface scroll">
                     <div class="big">
                       <div><b id="bigHandshake">—</b><span>verified link</span></div>
                       <div><b id="bigRequest">—</b><span>last ChatGPT call</span></div>
