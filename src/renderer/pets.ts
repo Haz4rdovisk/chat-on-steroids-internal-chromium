@@ -1,7 +1,7 @@
 import type { AppApi } from '../preload/index.js';
 import type { PetLibraryState, PetRecord } from '../shared/pets.js';
 import type { PetController } from './pet.js';
-import { $, el, icon, run, toast } from './dom.js';
+import { $, el, icon, initCardMenuDismissal, run, toast } from './dom.js';
 import { t, ui } from './i18n.js';
 
 const builtinAtlas = new URL('./pet-assets/atlas.png', import.meta.url).href;
@@ -164,16 +164,22 @@ function action(label: string | (() => string), work: () => void | Promise<void>
 
 function closeDialog(): void { document.querySelector<HTMLDialogElement>('#petDialog')?.close(); }
 
-function confirmDelete(pet: PetRecord, remove: () => Promise<void>): void {
+function confirmDelete(pet: PetRecord, api: AppApi, remove: () => Promise<boolean>): void {
   document.querySelector('#petDialog')?.remove();
-  const dialog = document.createElement('dialog'); dialog.id = 'petDialog'; dialog.className = 'plugin-dialog';
+  const dialog = document.createElement('dialog'); dialog.id = 'petDialog'; dialog.className = 'plugin-dialog pet-delete-dialog';
   const head = el('div', 'plugin-dialog-head'); const title = el('h2', '', () => t('Delete {0}?', [pet.displayName])); title.id = 'petDialogTitle';
   dialog.setAttribute('aria-labelledby', title.id); head.append(title, action(() => t('Close'), closeDialog));
   const body = el('div', 'plugin-dialog-body');
-  body.append(el('p', '', () => t('This removes the pet from your local library. You can import it again later.')));
-  const removeButton = action(() => t('Delete pet'), async () => { await remove(); dialog.close(); });
-  removeButton.classList.add('plugin-destructive'); body.append(removeButton); dialog.append(head, body);
-  dialog.addEventListener('close', () => dialog.remove()); document.body.append(dialog); dialog.showModal();
+  const identity = el('div', 'pet-delete-identity');
+  const copy = el('div', 'pet-delete-copy'); copy.append(el('h3', '', pet.displayName), el('p', '', pet.description));
+  identity.append(preview(pet, api), copy);
+  body.append(identity, el('p', 'pet-delete-warning', () => t('This removes the pet from your local library. You can import it again later.')));
+  const actions = el('div', 'pet-delete-actions');
+  const cancelButton = action(() => t('Cancel'), () => dialog.close()); cancelButton.classList.add('btn-solid', 'pet-delete-cancel');
+  const removeButton = action(() => t('Delete pet'), async () => { if (await remove()) dialog.close(); });
+  removeButton.classList.add('plugin-destructive', 'pet-delete-confirm'); actions.append(cancelButton, removeButton);
+  body.append(actions); dialog.append(head, body);
+  dialog.addEventListener('close', () => dialog.remove()); document.body.append(dialog); dialog.showModal(); cancelButton.focus();
 }
 
 function preview(pet: PetRecord, api: AppApi): HTMLElement {
@@ -193,6 +199,7 @@ function preview(pet: PetRecord, api: AppApi): HTMLElement {
 }
 
 export function initPets(api: AppApi, runtime: PetController): void {
+  initCardMenuDismissal();
   let state: PetLibraryState = { pets: [] };
   let epoch = 0;
 
@@ -201,16 +208,17 @@ export function initPets(api: AppApi, runtime: PetController): void {
   const apply = (next: PetLibraryState): void => {
     state = next; runtime.applyLibraryState(next); render();
   };
-  const mutate = async (request: ReturnType<AppApi['petsList']>): Promise<void> => {
+  const mutate = async (request: ReturnType<AppApi['petsList']>): Promise<boolean> => {
     const own = ++epoch; const next = await run(request);
-    if (next && own === epoch) apply(next);
+    if (!next || own !== epoch) return false;
+    apply(next); return true;
   };
   const renderCard = (pet: PetRecord): HTMLElement => {
       const card = el('article', 'plugin-card pet-library-card'); card.dataset.petId = pet.id;
       const entry = el('div', 'plugin-entry pet-library-entry');
       const title = el('div', 'plugin-card-title'); title.append(el('h2', '', pet.displayName), el('p', 'muted', pet.description));
       const foot = el('div', 'plugin-card-foot');
-      foot.append(el('span', `pill${pet.enabled ? ' is-live' : ''}`, () => t(pet.enabled ? 'Active' : 'Inactive')));
+      foot.append(el('span', `pill pet-library-status${pet.enabled ? ' is-live' : ''}`, () => t(pet.enabled ? 'Active' : 'Inactive')));
       if (pet.builtin) foot.append(el('span', 'pet-library-bundled', () => t('Bundled')));
       title.append(foot); entry.append(preview(pet, api), title);
 
@@ -227,7 +235,7 @@ export function initPets(api: AppApi, runtime: PetController): void {
       const actions = el('div', 'plugin-menu-actions');
       actions.append(action(() => t(pet.enabled ? 'Disable' : 'Enable'), async () => { await mutate(api.petsSetEnabled(pet.id, !pet.enabled)); }));
       if (!pet.builtin) {
-        const remove = action(() => t('Delete'), () => confirmDelete(pet, async () => { await mutate(api.petsDelete(pet.id)); }));
+        const remove = action(() => t('Delete'), () => confirmDelete(pet, api, () => mutate(api.petsDelete(pet.id))));
         remove.classList.add('plugin-destructive'); actions.append(remove);
       }
       menu.append(summary, actions); card.append(entry, favorite, menu); return card;
@@ -241,7 +249,7 @@ export function initPets(api: AppApi, runtime: PetController): void {
     const favoriteCount = state.pets.length - libraryCount;
     ui($('petsCount'), 'textContent', () => t(libraryCount === 1 ? '{0} pet' : '{0} pets', [libraryCount]));
     const favoritesSection = $('petsFavoritesSection'); favoritesSection.hidden = favorites.length === 0;
-    $('petsFavoritesCount').textContent = String(favoriteCount);
+    ui($('petsFavoritesCount'), 'textContent', () => t(favoriteCount === 1 ? '{0} pet' : '{0} pets', [favoriteCount]));
     for (const pet of favorites) favoritesList.append(renderCard(pet));
     for (const pet of library) libraryList.append(renderCard(pet));
     if (!library.length && visible.length) libraryList.append(el('p', 'plugin-no-results muted', () => t('All matching pets are in Favorites.')));
@@ -249,6 +257,9 @@ export function initPets(api: AppApi, runtime: PetController): void {
   };
 
   $('petsSearch').addEventListener('input', render);
+  const formatDialog = $<HTMLDialogElement>('petFormatDialog');
+  $('petsFormatGuide').addEventListener('click', () => formatDialog.showModal());
+  $('petsFormatClose').addEventListener('click', () => formatDialog.close());
   $('petsCopyInstructions').addEventListener('click', () => void (async () => {
     const copied = await run(api.writeClipboard(PET_FORMAT_INSTRUCTIONS));
     if (copied) toast(t('CoS Pets instructions copied'));

@@ -2,7 +2,7 @@ import { ui, t } from './i18n.js';
 import type { AppState } from '../shared/types.js';
 import type { SettingsPatch } from '../preload/index.js';
 import type { PluginSnapshot, PluginView, PluginCatalogEntry, PluginSource } from '../shared/plugins.js';
-import { $, el, icon, run, toast } from './dom.js';
+import { $, el, icon, initCardMenuDismissal, run, toast } from './dom.js';
 
 let snapshot: PluginSnapshot = { plugins: [], catalog: [], schemaRevision: 0 };
 let epoch = 0;
@@ -283,6 +283,7 @@ function showCustom(kind: PluginSource['kind'], path = ''): void {
   }, true));
 }
 export function initPlugins(onState: (next: AppState) => void = () => {}): void {
+  initCardMenuDismissal();
   applyAppState = onState;
   $('pluginsAdd').addEventListener('click', showCatalog); $('pluginsRefresh').addEventListener('click', () => void refreshPlugins());
   $('pluginsSearch').addEventListener('input', renderInstalled);

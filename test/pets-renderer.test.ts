@@ -13,8 +13,9 @@ const initial: PetLibraryState = { pets: [
 
 it('renders the plugin-style library and wires import, multi-enable, favorite, delete and animated preview', async () => {
   dom = new JSDOM(`<!doctype html><body>
-    <input id="petsSearch"><button id="petsImport"></button><button id="petsCopyInstructions"></button>
-    <pre id="petsFormatInstructions"></pre><span id="petsCount"></span>
+    <input id="petsSearch"><button id="petsImport"></button><button id="petsFormatGuide"></button>
+    <dialog id="petFormatDialog"><button id="petsFormatClose"></button><button id="petsCopyInstructions"></button><pre id="petsFormatInstructions"></pre></dialog>
+    <span id="petsCount"></span>
     <section id="petsFavoritesSection" hidden><span id="petsFavoritesCount"></span><div id="petsFavorites"></div></section>
     <div id="petsInstalled"></div>
   </body>`, { url: 'https://pets.test/' });
@@ -42,6 +43,10 @@ it('renders the plugin-style library and wires import, multi-enable, favorite, d
 
   await vi.waitFor(() => expect(w.document.querySelectorAll('.pet-library-card')).toHaveLength(2));
   expect(w.document.getElementById('petsCount')!.textContent).toContain('2 pets');
+  (w.document.getElementById('petsFormatGuide') as HTMLButtonElement).click();
+  expect((w.document.getElementById('petFormatDialog') as HTMLDialogElement).open).toBe(true);
+  (w.document.getElementById('petsFormatClose') as HTMLButtonElement).click();
+  expect((w.document.getElementById('petFormatDialog') as HTMLDialogElement).open).toBe(false);
   expect(w.document.getElementById('petsFormatInstructions')!.textContent).toContain('All 96 frame slots are present');
   expect(w.document.getElementById('petsFormatInstructions')!.textContent).toContain('every string key "69" through "84"');
   expect(w.document.getElementById('petsFormatInstructions')!.textContent).toContain('<describe your character here>');
@@ -57,6 +62,14 @@ it('renders the plugin-style library and wires import, multi-enable, favorite, d
   await vi.waitFor(() => expect(w.document.querySelector('[data-pet-id="willow"] .pet-library-preview-frame')!.classList.contains('is-animated')).toBe(true));
   expect(petsAsset).toHaveBeenCalledWith('willow', true);
 
+  const willowMenu = w.document.querySelector<HTMLDetailsElement>('[data-pet-id="willow"] .plugin-menu')!;
+  willowMenu.open = true;
+  w.document.body.click();
+  expect(willowMenu.open).toBe(false);
+  willowMenu.open = true;
+  willowMenu.querySelector('summary')!.click();
+  expect(willowMenu.open).toBe(false);
+
   (w.document.querySelector('[data-pet-id="willow"] .pet-favorite') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(petsSetFavorite).toHaveBeenCalledWith('willow', true));
   await vi.waitFor(() => expect(runtime.applyLibraryState).toHaveBeenCalledWith(expect.objectContaining({ pets: expect.arrayContaining([expect.objectContaining({ id: 'willow', favorite: true })]) })));
@@ -70,8 +83,18 @@ it('renders the plugin-style library and wires import, multi-enable, favorite, d
 
   (w.document.querySelector('[data-pet-id="willow"] .plugin-destructive') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(w.document.getElementById('petDialog')).not.toBeNull());
+  expect(w.document.querySelector('#petDialog .pet-delete-identity h3')!.textContent).toBe('Willow');
+  expect(w.document.querySelector('#petDialog .pet-delete-warning')!.textContent).toContain('local library');
+  expect(w.document.activeElement).toBe(w.document.querySelector('#petDialog .pet-delete-cancel'));
+  (w.document.querySelector('#petDialog .pet-delete-cancel') as HTMLButtonElement).click();
+  await vi.waitFor(() => expect(w.document.getElementById('petDialog')).toBeNull());
+  expect(petsDelete).not.toHaveBeenCalled();
+
+  (w.document.querySelector('[data-pet-id="willow"] .plugin-destructive') as HTMLButtonElement).click();
+  await vi.waitFor(() => expect(w.document.getElementById('petDialog')).not.toBeNull());
   (w.document.querySelector('#petDialog .plugin-destructive') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(petsDelete).toHaveBeenCalledWith('willow'));
+  await vi.waitFor(() => expect(w.document.getElementById('petDialog')).toBeNull());
 
   (w.document.getElementById('petsImport') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(petsImport).toHaveBeenCalledTimes(1));

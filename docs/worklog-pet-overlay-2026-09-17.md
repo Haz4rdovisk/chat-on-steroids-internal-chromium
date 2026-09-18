@@ -143,3 +143,21 @@ Still unproven: click-through over another desktop app, task updates from a
 real session/swarm, packaging and installed
 payload behavior. The isolated smoke proves the renderer and native window
 path, not those later evidence levels.
+
+## 2026-09-18 — Pets library UI refinement
+
+- Pets now follows the Plugins page's help-row, dialog, two-column card and
+  responsive patterns. The import specification moved out of the inline
+  accordion into the existing dialog style. The short help copy leaves room
+  before its action, cards in a row share a height, and each Active/Inactive
+  status stays at the card's lower-right corner.
+- The delete confirmation now identifies the selected pet with its preview,
+  separates the consequence from the controls, focuses Cancel first, and
+  closes after Delete only when the library mutation succeeds. Card action
+  menus in Pets and Plugins share one outside-click/Escape dismissal owner.
+- Validation: focused Pets and Plugins UI suites passed (15/15), the earlier
+  Pets/i18n focused run passed (8/8), `npm run typecheck` and `git diff --check`
+  passed. The scoped layout detector found no issues in the changed menu/dialog
+  code. A clean Vite/Electron dev launch reached port 5173; the grid was
+  visually checked, but the redesigned delete dialog was not captured in a
+  reliable live screenshot. No package or installed-payload claim is made.

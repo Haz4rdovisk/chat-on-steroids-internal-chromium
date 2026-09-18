@@ -262,10 +262,14 @@
         <section class="panel plugins-panel pets-panel" data-panel="pets">
           <div class="plugins-content">
             <header class="plugin-page-head"><div><h1>Pets</h1><p>Your little desktop companions.</p></div><div class="plugin-search-actions"><label class="plugin-search"><i class="ico ph ph-magnifying-glass" aria-hidden="true"></i><input id="petsSearch" type="search" placeholder="Search pets" aria-label="Search pets" /></label><button class="btn plugin-add" id="petsImport" type="button" aria-label="Import CoS Pet folder" title="Import CoS Pet folder"><i class="ico ph ph-plus" aria-hidden="true"></i></button></div></header>
-            <details class="pet-format-guide">
-              <summary><i class="ico ph ph-caret-right pet-format-chevron" aria-hidden="true"></i><span>What can I import?</span></summary>
-              <div class="pet-format-guide-body">
-                <div class="pet-format-guide-head"><div><p>A compatible pet is a folder with three files.</p></div><button class="btn" id="petsCopyInstructions" type="button">Copy instructions</button></div>
+            <div class="plugin-refresh-guide pet-import-guide">
+              <p>A compatible pet is a folder with three files.</p>
+              <button class="btn" id="petsFormatGuide" type="button">What can I import?</button>
+            </div>
+            <dialog class="plugin-dialog" id="petFormatDialog" aria-labelledby="petFormatTitle">
+              <div class="plugin-dialog-head"><h2 id="petFormatTitle">What can I import?</h2><button class="btn" id="petsFormatClose" type="button">Close</button></div>
+              <div class="plugin-dialog-body pet-format-content">
+                <div class="pet-format-guide-head"><p>A compatible pet is a folder with three files.</p><button class="btn" id="petsCopyInstructions" type="button">Copy instructions</button></div>
                 <p class="pet-format-folder">Import the folder itself with <code>pet.json</code>, <code>atlas.png</code>, and <code>animations.json</code>. Chat On Steroids validates all three before copying the pet into your local library.</p>
                 <div class="pet-format-ai-help">
                   <strong>AI-assisted creation</strong>
@@ -273,7 +277,7 @@
                 </div>
                 <pre id="petsFormatInstructions"></pre>
               </div>
-            </details>
+            </dialog>
             <section id="petsFavoritesSection" hidden>
               <div class="plugin-section-head"><h2>Favorites <span id="petsFavoritesCount" class="plugin-count"></span></h2></div>
               <div id="petsFavorites" class="pet-library-grid" aria-live="polite"></div>

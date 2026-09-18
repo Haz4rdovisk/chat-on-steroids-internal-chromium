@@ -74,6 +74,26 @@ export function el(tag: string, className = '', text: string | (() => string) = 
 
 export const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
+const cardMenuDocuments = new WeakSet<Document>();
+
+/** Card action menus share one outside-click and Escape boundary across Pets and Plugins. */
+export function initCardMenuDismissal(doc: Document = document): void {
+  if (cardMenuDocuments.has(doc)) return;
+  cardMenuDocuments.add(doc);
+  doc.addEventListener('click', (event) => {
+    const target = event.target as Element | null;
+    const menu = typeof target?.closest === 'function' ? target.closest('.plugin-menu') : null;
+    const action = typeof target?.closest === 'function' ? target.closest('.plugin-menu-actions') : null;
+    for (const open of doc.querySelectorAll<HTMLDetailsElement>('.plugin-menu[open]')) {
+      if (open !== menu || action) open.open = false;
+    }
+  });
+  doc.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    for (const open of doc.querySelectorAll<HTMLDetailsElement>('.plugin-menu[open]')) open.open = false;
+  });
+}
+
 /** Filter complete settings sections so headings, controls and their context stay together. */
 export function filterSettingsSections(view: HTMLElement, search: string): void {
   const query = search.trim().toLowerCase();
