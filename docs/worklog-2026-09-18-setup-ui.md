@@ -10,6 +10,8 @@ browser-pairing owners were not changed.
 ## Change
 
 - Aligned the heading, guide and advanced disclosure to the Settings layout.
+- Moved responsive page padding from the inner sheet to the Setup panel so the actual
+  content canvas reaches 940px on wide windows, matching the other Settings pages.
 - Gave each step its own card after live feedback that the single surface felt crowded.
   Replaced the bright filled completion circles with restrained green checks, kept
   numbers for incomplete steps and retained the existing verified-completion checks.
@@ -23,8 +25,9 @@ browser-pairing owners were not changed.
 
 ## Validation
 
-- Electron `scripts/verify-setup-guide.cjs`: 20 screenshot layouts passed at 1100, 800
-  and 640px, including 1.5× zoom, English and Chinese, dark and light themes.
+- Electron `scripts/verify-setup-guide.cjs`: 25 screenshot layouts passed at 1400, 1100,
+  800 and 640px, including an exact 940px wide canvas, 1.5× zoom, English and Chinese,
+  dark and light themes.
 - `npm test -- --run test/renderer-layout.test.ts test/renderer-i18n.test.ts
   test/renderer-i18n-es.test.ts test/renderer-i18n-tw.test.ts test/connection.test.ts`:
   76 tests passed.

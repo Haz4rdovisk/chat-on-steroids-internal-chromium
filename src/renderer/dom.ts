@@ -64,6 +64,25 @@ export function icon(name: string, className = 'ico'): HTMLElement {
   return node;
 }
 
+/**
+ * A disclosure indicator with geometry that rotates around its actual visual center.
+ *
+ * Font carets sit on a text baseline, so their ink appears to jump while rotating even
+ * when the element's box stays put. Keep every animated disclosure on this authored SVG;
+ * directional action icons continue to use the regular Phosphor icon helper.
+ */
+export function disclosureChevron(className = ''): SVGSVGElement {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  node.setAttribute('class', `disclosure-chevron${className ? ` ${className}` : ''}`);
+  node.setAttribute('viewBox', '0 0 16 16');
+  node.setAttribute('aria-hidden', 'true');
+  node.setAttribute('focusable', 'false');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M6 3.5 10.5 8 6 12.5');
+  node.append(path);
+  return node;
+}
+
 export function el(tag: string, className = '', text: string | (() => string) = ''): HTMLElement {
   const node = document.createElement(tag);
   if (className) node.className = className;

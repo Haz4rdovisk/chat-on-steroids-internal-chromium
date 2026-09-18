@@ -40,7 +40,7 @@ import {
   WRITE_CAPABILITIES
 } from '../shared/types.js';
 import type { SwarmState } from '../shared/session.js';
-import { $, ago, el, icon, run, shortAgo, toast } from './dom.js';
+import { $, ago, disclosureChevron, el, icon, run, shortAgo, toast } from './dom.js';
 import { chatApply, chatSettingsPatch, chatVisible, initChat, openChatView } from './chat.js';
 
 declare global {
@@ -252,7 +252,7 @@ function groupShell(id: string, title: string, iconId: string, box: HTMLInputEle
   main.type = 'button';
   const text = el('span');
   text.append(el('b', '', () => t(title)), el('em', 'group-count'));
-  main.append(icon('i-chev', 'ico chev'), icon(iconId), text);
+  main.append(disclosureChevron('ico chev'), icon(iconId), text);
   main.addEventListener('click', () => {
     openGroup = openGroup === id ? null : id;
     paintGroups();
@@ -1271,7 +1271,7 @@ function connectorCards(next: AppState, desktopExpanded: boolean): HTMLElement[]
 
     const head = optional ? document.createElement('summary') : el('div');
     head.className = 'connector-head';
-    if (optional) head.append(icon('i-chev', 'ico connector-chevron'));
+    if (optional) head.append(disclosureChevron('ico connector-chevron'));
     head.append(
       el('h4', '', surface.connectorName),
       el('span', `tag${surface.optional ? ' is-optional' : ''}`, () => t(surface.optional ? 'optional' : 'required')),

@@ -25,17 +25,23 @@ let document: Document;
 let css = '';
 let chatSource = '';
 let browserPreferencesSource = '';
+let disclosureSource = '';
 
 beforeAll(async () => {
   browserPreferencesSource = await fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'browser-preferences.ts'), 'utf8');
-  const [html, styles, chat] = await Promise.all([
+  const [html, styles, chat, main, filePanel, agentPlan, plugins] = await Promise.all([
     fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'index.html'), 'utf8'),
     fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'styles.css'), 'utf8'),
-    fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'chat.ts'), 'utf8')
+    fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'chat.ts'), 'utf8'),
+    fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'main.ts'), 'utf8'),
+    fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'file-panel.ts'), 'utf8'),
+    fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'agent-plan.ts'), 'utf8'),
+    fs.readFile(path.join(process.cwd(), 'src', 'renderer', 'plugins.ts'), 'utf8')
   ]);
   document = new JSDOM(html).window.document;
   css = styles;
   chatSource = chat;
+  disclosureSource = [chat, main, filePanel, agentPlan, plugins].join('\n');
 });
 
 it('searches whole settings sections without empty headings, orphaned controls or lost conditional visibility', () => {
@@ -93,6 +99,23 @@ it('groups Appearance into the shared settings sections without moving its contr
   expect(document.getElementById('appearanceReset')!.closest('.appearance-page-head')).not.toBeNull();
   expect(document.getElementById('uiLanguage')!.closest('.appearance-section')?.querySelector('h2')?.textContent).toBe('Preferences');
   expect(document.getElementById('setupProfile')!.closest('.appearance-section')?.querySelector('h2')?.textContent).toBe('Preferences');
+});
+
+it('uses one centered vector geometry for animated disclosure and dropdown indicators', () => {
+  const staticIndicators = [...document.querySelectorAll<SVGElement>('svg.disclosure-chevron')];
+  expect(staticIndicators).toHaveLength(8);
+  expect(staticIndicators.every(node => node.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+  expect(staticIndicators.every(node => node.querySelector('path')?.getAttribute('d') === 'M6 3.5 10.5 8 6 12.5')).toBe(true);
+  expect(document.querySelectorAll('.sidebar-section-chev.ph, .sum-chev.ph, .picker-chevron.ph')).toHaveLength(0);
+  expect(disclosureSource).not.toContain("icon('i-chev'");
+  expect(disclosureSource.match(/disclosureChevron\(/g)).toHaveLength(10);
+  expect(rule('.disclosure-chevron')).toContain('transform-box: view-box');
+  expect(rule('.disclosure-chevron')).toContain('transform-origin: 50% 50%');
+  expect(rule('.dropdown-chevron')).toContain('rotate(90deg)');
+  expect(rule('select::picker-icon')).toContain("content: ''");
+  expect(rule('select::picker-icon')).toContain('mask: url(');
+  expect(rule('select:open::picker-icon')).toContain('rotate(270deg)');
+  expect(css).toContain(':where(.plugin-about, .plugin-legal, .setup-optional, .session-diagnostics, .connection-runtime)[open] > summary .details-chevron { transform: rotate(90deg); }');
 });
 
 it('limits the existing tool-detail preference to handoff briefs', () => {

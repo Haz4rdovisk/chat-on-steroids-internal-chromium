@@ -57,7 +57,7 @@ app.whenReady().then(async () => {
     assert.equal(ready, true);
     await win.webContents.executeJavaScript('document.fonts.ready.then(() => true)');
     const results = [];
-    for (const [width, height, zoom, language, theme] of [[1100, 900, 1, 'en', 'dark'], [800, 650, 1, 'en', 'dark'], [1100, 900, 1.5, 'zh-CN', 'light'], [640, 720, 1, 'zh-CN', 'dark']]) {
+    for (const [width, height, zoom, language, theme] of [[1400, 900, 1, 'en', 'dark'], [1100, 900, 1, 'en', 'dark'], [800, 650, 1, 'en', 'dark'], [1100, 900, 1.5, 'zh-CN', 'light'], [640, 720, 1, 'zh-CN', 'dark']]) {
       win.setSize(width, height);
       win.webContents.setZoomFactor(zoom);
       await win.webContents.executeJavaScript(`window.setLanguage('${language}')`);
@@ -72,9 +72,13 @@ app.whenReady().then(async () => {
         const first = steps[0].getBoundingClientRect();
         const second = steps[1].getBoundingClientRect();
         const doneMark = steps[0].querySelector('.step-mark');
+        const panelStyle = getComputedStyle(panel);
+        const available = panel.clientWidth - parseFloat(panelStyle.paddingLeft) - parseFloat(panelStyle.paddingRight);
         return {
           overflow: panel.scrollWidth > panel.clientWidth,
           aligned: Math.abs(header.left - wizard.left) < 1 && Math.abs(header.right - wizard.right) < 1,
+          canvasWidth: Math.round(wizard.width),
+          canvasWidthMatches: Math.abs(wizard.width - Math.min(940, available)) < 1.5,
           languagesFit: languages.left >= header.left - 1 && languages.right <= header.right + 1,
           separateCards: getComputedStyle(panel.querySelector('.wizard')).borderTopWidth === '0px'
             && steps.every(step => parseFloat(getComputedStyle(step).borderTopWidth) > 0
@@ -87,8 +91,9 @@ app.whenReady().then(async () => {
           numbered: [...panel.querySelectorAll('.step-mark')].every(mark => getComputedStyle(mark, '::before').content === 'counter(setup-step)')
         };
       })()`);
-      assert.deepEqual(page, { overflow: false, aligned: true, languagesFit: true,
-        separateCards: true, doneCheck: true, numbered: true },
+      assert.deepEqual(page, { overflow: false, aligned: true,
+        canvasWidth: width === 1400 && zoom === 1 ? 940 : page.canvasWidth,
+        canvasWidthMatches: true, languagesFit: true, separateCards: true, doneCheck: true, numbered: true },
         JSON.stringify({ width, zoom, language, page }));
       await win.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
       fs.writeFileSync(path.join(output, `${language}-${width}-${zoom}-top.png`), (await win.webContents.capturePage()).toPNG());

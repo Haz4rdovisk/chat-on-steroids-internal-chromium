@@ -1,6 +1,6 @@
 import { ui, t } from './i18n.js';
 import type { AgentPlan } from '../shared/agent-plan.js';
-import { el, icon } from './dom.js';
+import { disclosureChevron, el, icon } from './dom.js';
 
 /** One current plan above the composer queue; every model string is text, never HTML. */
 export function renderAgentPlan(host: HTMLElement, sessionId: string | null, plan: AgentPlan | null): void {
@@ -36,7 +36,7 @@ export function renderAgentPlan(host: HTMLElement, sessionId: string | null, pla
   shell.open = previous?.open ?? false;
   const heading = el('summary', 'agent-plan-heading');
   heading.append(icon('i-steps'), el('span', 'agent-plan-title', () => completed === plan.plan.length ? t("Plan complete") : t("Plan")),
-    el('span', 'agent-plan-count', `${completed} / ${plan.plan.length}`), icon('i-chev', 'ico agent-plan-chevron'));
+    el('span', 'agent-plan-count', `${completed} / ${plan.plan.length}`), disclosureChevron('ico agent-plan-chevron'));
   shell.append(heading);
   const body = el('div', 'agent-plan-body');
   if (plan.explanation) body.append(el('p', 'agent-plan-explanation', plan.explanation));

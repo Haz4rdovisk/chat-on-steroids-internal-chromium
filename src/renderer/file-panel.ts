@@ -4,7 +4,7 @@ import type { ProjectDirectoryListing, ProjectFileEntry, ProjectFileKind, Projec
 import { safeExternalLink } from '../shared/external-link.js';
 import { marked } from 'marked';
 import { t, ui } from './i18n.js';
-import { el, icon, run, toast } from './dom.js';
+import { disclosureChevron, el, icon, run, toast } from './dom.js';
 import { attachWorkPanelResize } from './work-panel-resize.js';
 import type { ProjectCodeEditor } from './file-code-editor.js';
 import type { ProjectPdfViewer } from './file-pdf-viewer.js';
@@ -544,7 +544,7 @@ export function createFilePanel(options: FilePanelOptions) {
     const isOpen = entry.kind === 'directory' && expanded.has(entry.path);
     const disclosure = el('span', `file-tree-disclosure${isOpen ? ' is-open' : ''}`);
     disclosure.setAttribute('aria-hidden', 'true');
-    if (entry.kind === 'directory') disclosure.append(icon('i-chev', 'ph-file-disclosure'));
+    if (entry.kind === 'directory') disclosure.append(disclosureChevron('ph-file-disclosure'));
     row.append(disclosure, icon(entry.kind === 'directory' ? (isOpen ? 'i-folder-open' : 'i-folder') : entry.kind === 'file' ? 'i-file' : 'i-ban', 'file-tree-icon'));
     row.append(el('span', 'file-tree-name', entry.name));
     if (entry.kind === 'file' && entry.bytes !== null) row.append(el('span', 'file-tree-size', humanBytes(entry.bytes)));

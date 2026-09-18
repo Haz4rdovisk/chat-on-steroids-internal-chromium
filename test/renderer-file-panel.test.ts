@@ -327,7 +327,7 @@ it('keeps one compact toolbar and closes through the Files toggle', async () => 
   expect(host.querySelector('.file-panel-toolbar .file-panel-refresh .ph-arrow-clockwise')).not.toBeNull();
   expect(host.querySelector('[title="New file"] .ph-file-plus')).not.toBeNull();
   expect(host.querySelector('[title="New folder"] .ph-folder-plus')).not.toBeNull();
-  expect(disclosure.querySelector('.ph-caret-right')).not.toBeNull();
+  expect(disclosure.querySelector('.disclosure-chevron path')?.getAttribute('d')).toBe('M6 3.5 10.5 8 6 12.5');
   expect(host.querySelector('[data-path="src"] .ph-folder')).not.toBeNull();
   toggle.click(); await tick();
   expect(host.querySelector<HTMLElement>('.file-panel')!.hidden).toBe(true);

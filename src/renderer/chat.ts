@@ -62,7 +62,7 @@ import {
   MAX_GOAL_SYSTEM_PROMPT_CHARS
 } from '../shared/goal.js';
 import { browserExtensionRequired, type AppState, type Config } from '../shared/types.js';
-import { $, ago, clockTime, compactNumber, el, filterSettingsSections, icon, run, toast } from './dom.js';
+import { $, ago, clockTime, compactNumber, disclosureChevron, el, filterSettingsSections, icon, run, toast } from './dom.js';
 
 const api = window.api;
 
@@ -627,7 +627,7 @@ function paintSessions(): void {
   const diagnostics: SessionSummary[] = [];
   const group = (key: string, workers: SessionSummary[], parentRow?: HTMLElement, target = rows): void => {
     const button = el('button', 'worker-toggle');
-    button.append(icon('i-chev'));
+    button.append(disclosureChevron());
     ui(button, 'title', () => t("{0} sub-agents · {1} active", [workers.length, workers.filter(sessionWorking).length]));
     ui(button, 'aria-label', () => t("{0} {1} sub-agents", [expandedWorkers.has(key) ? t("Collapse") : t("Expand"), workers.length]));
     button.setAttribute('type', 'button'); button.setAttribute('aria-expanded', String(expandedWorkers.has(key)));
@@ -657,7 +657,9 @@ function paintSessions(): void {
   if (otherWorkers.length) {
     const history = document.createElement('details'); history.className = 'session-diagnostics';
     history.open = expandedWorkers.has('other-workers');
-    history.append(el('summary', '', () => t("Sub-agent history · {0}", [otherWorkers.length])));
+    const historySummary = el('summary');
+    historySummary.append(disclosureChevron('details-chevron'), el('span', '', () => t("Sub-agent history · {0}", [otherWorkers.length])));
+    history.append(historySummary);
     history.append(...otherWorkers.map(sessionRow));
     history.addEventListener('toggle', () => { if (history.isConnected) history.open ? expandedWorkers.add('other-workers') : expandedWorkers.delete('other-workers'); });
     rows.push(history);
@@ -737,7 +739,9 @@ function paintSessions(): void {
     const disclosure = document.createElement('details');
     disclosure.className = 'session-diagnostics';
     disclosure.open = diagnosticsExpanded;
-    disclosure.append(el('summary', '', () => t("Unattributed activity · {0}", [diagnostics.length])));
+    const diagnosticsSummary = el('summary');
+    diagnosticsSummary.append(disclosureChevron('details-chevron'), el('span', '', () => t("Unattributed activity · {0}", [diagnostics.length])));
+    disclosure.append(diagnosticsSummary);
     disclosure.append(...diagnostics.map(sessionRow));
     disclosure.addEventListener('toggle', () => { diagnosticsExpanded = disclosure.open; });
     rows.push(disclosure);
@@ -2505,7 +2509,7 @@ function groupToolRows(rows: HTMLElement[], scope = selectedId, groups = toolGro
       group = document.createElement('details'); group.className = 'tool-group';
       group.dataset.timelineKey = key;
       const summary = document.createElement('summary');
-      summary.append(el('span', 'activity-symbol'), el('span', 'activity-title'), icon('i-chev', 'ico activity-chevron'));
+      summary.append(el('span', 'activity-symbol'), el('span', 'activity-title'), disclosureChevron('ico activity-chevron'));
       group.append(summary, el('div', 'tool-group-body'));
       group.addEventListener('toggle', () => { if (group!.open) openTools.add(key); else openTools.delete(key); });
       group.open = openTools.has(key) || rows.slice(i, end).some((row) => row.querySelector('details[open]')); groups.set(key, group);
