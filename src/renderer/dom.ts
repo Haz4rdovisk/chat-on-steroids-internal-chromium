@@ -98,7 +98,7 @@ export function initCardMenuDismissal(doc: Document = document): void {
 export function filterSettingsSections(view: HTMLElement, search: string): void {
   const query = search.trim().toLowerCase();
   let matches = 0;
-  for (const heading of view.querySelectorAll<HTMLElement>('.settings-section-title')) {
+  for (const heading of view.querySelectorAll<HTMLElement>('.automation-section-head')) {
     const pane = heading.nextElementSibling as HTMLElement | null;
     if (!pane?.classList.contains('pane')) continue;
     const visible = !query || `${heading.textContent} ${pane.textContent}`.toLowerCase().includes(query);

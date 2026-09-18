@@ -2474,7 +2474,8 @@ receipt. Native edit context menus respect the focused editable control and sele
 Setup's Show/Hide guide button stays available even while setup is incomplete. Manual collapse
 survives status pushes. Profile management stays out of first-run Setup: a compact row below
 Language in Appearance has a dropdown, a plus button with a name dialog and a delete button
-on each profile entry. New chat uses the existing
+on each profile entry. The dropdown anchors below and right-aligned to its trigger, flipping only
+when there is insufficient viewport space. New chat uses the existing
 pencil icon, with white foreground in dark mode. `scripts/verify-sidebar-setup.cjs` exercises
 real Electron pointer/keyboard input and layout against isolated production renderer modules.
 The base zoom is 1.17 (10% below the former 1.3); the existing zoom controls remain relative to it.
@@ -2547,12 +2548,19 @@ not displace or strand a neighboring column. Existing control IDs and main-proce
 unchanged. `scripts/verify-workspace-ui.cjs` checks the order, shared width and overflow in real
 Chromium with both desktop and narrow viewports, including a long folder list.
 Usage Settings shares that canvas and one-column section rhythm: recorded summary, estimated
-daily token activity, editable comparison costs and independently reported ChatGPT balances.
+daily token activity, comparison costs split into model and day surfaces, and independently
+reported ChatGPT balances. The cost formula opens inline from the right-aligned section action.
 The summary and heatmap use local estimates, never provider billing; model/shared/feature
 remaining balances are only what ChatGPT reported. The 52-week grid and tables scroll within
 their own bounded surfaces on narrow windows, not across the Settings page.
 `scripts/verify-usage-ui.cjs` checks section geometry, summary reflow and local scrolling
 in real Chromium at desktop and narrow widths without reading user data.
+Agents & automation Settings uses the same 940px one-column canvas and section surfaces.
+Its search shares the Pets/Skills/Plugins pill treatment, and each section has a short
+description. Search filters whole header-and-surface pairs while leaving conditional editors
+hidden until requested. Model refresh belongs in its section header; Clear swarm remains beside
+the worker list. `scripts/verify-agents-automation-ui.cjs` checks alignment and overflow in
+isolated Chromium at desktop and narrow widths without reading the live profile.
 Settings places ChatGPT model defaults second and Workers & recovery third, after Continuation
 sources. Appearance has its own Settings navigation page, including the language selector and
 existing setup profiles. The connector-instructions editor
@@ -2566,6 +2574,9 @@ do not change neighboring rasterized edges at fractional zoom. Top-layer options
 outside that clip. `scripts/verify-settings-focus.cjs` checks unchanged geometry, pixel-exact
 restoration after closing/blurring, and hit testing options beyond the card edge.
 
+Appearance Settings shares the 940px one-column canvas and section-header rhythm with Workspace,
+Usage and Agents. Its live preview leads, followed by Colors, Typography and Preferences;
+Reset appearance sits in the page header because it affects both palettes and typography.
 Appearance uses `ui.appearance` in the existing config, with separate Light/Dark background,
 sidebar and accent RGB colors plus contrast. Native color pickers and HEX fields allow every
 six-digit RGB color. A shared font choice, 12–18px base text size and translucent-sidebar switch

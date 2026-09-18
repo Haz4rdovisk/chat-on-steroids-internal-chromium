@@ -40,11 +40,11 @@ beforeAll(async () => {
 
 it('searches whole settings sections without empty headings, orphaned controls or lost conditional visibility', () => {
   const view = document.querySelector<HTMLElement>('[data-view="settings"]')!;
-  const sections = [...view.querySelectorAll<HTMLElement>('.settings-section-title')];
+  const sections = [...view.querySelectorAll<HTMLElement>('.automation-section-head')];
   const conditional = document.getElementById('goalModels')!;
   expect(conditional.hidden).toBe(true);
   filterSettingsSections(view, '  SESSION FINISH  ');
-  expect(sections.filter(section => !section.hidden).map(section => section.textContent)).toEqual(['Keep the turn open']);
+  expect(sections.filter(section => !section.hidden).map(section => section.querySelector('h2')?.textContent)).toEqual(['Keep the turn open']);
   for (const section of sections) expect((section.nextElementSibling as HTMLElement).hidden).toBe(section.hidden);
   expect(document.getElementById('finishTool')!.closest('.pane')!.hasAttribute('hidden')).toBe(false);
   expect(document.getElementById('goalKey')!.closest('.pane')!.hasAttribute('hidden')).toBe(true);
@@ -67,6 +67,32 @@ it('animates Agents & automation only at its inner view boundary', () => {
   expect(css).toContain(".app[data-screen='settings'] .panel.is-active:not([data-panel='chat']),\n.app[data-screen='library'] .panel.is-active { animation: surface-in 160ms ease-out; }");
   expect(rule(".app[data-screen='settings'] [data-view='settings']:not([hidden])")).toContain('animation: surface-in 160ms ease-out');
   expect(css).not.toContain(".app[data-screen='settings'] .panel.is-active, .app[data-screen='settings'] [data-view='settings']");
+});
+
+it('keeps Agents & automation on the shared settings canvas with its model action in the section header', () => {
+  const view = document.querySelector<HTMLElement>('[data-view="settings"]')!;
+  const sections = [...view.querySelectorAll<HTMLElement>('.automation-section-head')];
+  expect(view.classList.contains('settings-page-content')).toBe(true);
+  expect(view.querySelector('.settings-page-head #settingsSearch')).not.toBeNull();
+  expect(document.getElementById('settingsSearch')!.closest('.plugin-search')?.querySelector('.ph-magnifying-glass')).not.toBeNull();
+  expect(sections).toHaveLength(7);
+  expect(sections.every(section => Boolean(section.querySelector('p')?.textContent?.trim()))).toBe(true);
+  expect(sections.every(section => section.nextElementSibling?.classList.contains('settings-surface'))).toBe(true);
+  expect(document.getElementById('refreshChatModels')!.closest('.automation-section-head')?.querySelector('h2')?.textContent).toBe('ChatGPT models');
+  expect(document.getElementById('swarmReset')!.closest('.pane')?.previousElementSibling?.querySelector('h2')?.textContent).toBe('Workers & recovery');
+});
+
+it('groups Appearance into the shared settings sections without moving its controls or reset scope', () => {
+  const panel = document.getElementById('appearancePanel')!;
+  const content = panel.querySelector('.appearance-content')!;
+  const sections = [...content.querySelectorAll('.appearance-section')];
+  expect(content.classList.contains('settings-page-content')).toBe(true);
+  expect(sections.map(section => section.querySelector('h2')?.textContent)).toEqual(['Preview', 'Colors', 'Typography', 'Preferences']);
+  expect(sections.every(section => Boolean(section.querySelector('.settings-section-head p')?.textContent?.trim()))).toBe(true);
+  expect(sections.every(section => Boolean(section.querySelector('.appearance-preview, .appearance-settings-card')))).toBe(true);
+  expect(document.getElementById('appearanceReset')!.closest('.appearance-page-head')).not.toBeNull();
+  expect(document.getElementById('uiLanguage')!.closest('.appearance-section')?.querySelector('h2')?.textContent).toBe('Preferences');
+  expect(document.getElementById('setupProfile')!.closest('.appearance-section')?.querySelector('h2')?.textContent).toBe('Preferences');
 });
 
 it('limits the existing tool-detail preference to handoff briefs', () => {
@@ -531,11 +557,10 @@ describe('the window as a whole', () => {
   });
 
   it('never scrolls sideways', () => {
-    // Authored tables/code, browser tabs and dense Usage data may scroll locally;
-    // the surrounding app must not.
+    // Authored tables/code and dense Usage data may scroll locally; the
+    // surrounding app must not.
     const horizontal = [...css.matchAll(/([^{}]+)\{[^{}]*overflow-x:\s*(?:auto|scroll)[^{}]*\}/g)];
     expect(horizontal.map(match => match[1]!.trim())).toEqual([
-      '.browser-dock-tabs',
       '.msg.rich .markdown-table',
       '.usage-heatmap-surface',
       '.usage-table-stack',

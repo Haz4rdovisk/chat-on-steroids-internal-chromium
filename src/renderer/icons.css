@@ -80,6 +80,7 @@
 .ph.ph-puzzle-piece::before { content: '\e596'; }
 .ph.ph-robot::before { content: '\e762'; }
 .ph.ph-sidebar-simple::before { content: '\ec24'; }
+.ph.ph-sliders-horizontal::before { content: '\e434'; }
 .ph.ph-star::before,
 .ph-fill.ph-star::before { content: '\e46a'; }
 .ph.ph-stop::before,

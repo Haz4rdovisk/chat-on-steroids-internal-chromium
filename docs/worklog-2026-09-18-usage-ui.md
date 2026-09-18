@@ -14,12 +14,16 @@ reported by ChatGPT. Estimated costs remain explicitly a comparison, not a bill.
 - The 52-week grid and wide data tables scroll within their own surfaces at narrow widths;
   the containing page does not scroll sideways. The summary reflows instead of squeezing
   five numbers into narrow columns.
-- The formula remains a native keyboard-accessible disclosure. Focus, neutral empty days,
-  and missing-balance wording retain the existing product semantics.
+- The cost comparison now separates model and day tables into peer surfaces. Its formula opens
+  inline from the section's right-aligned button, following the Workspace header action.
+  The button exposes its expanded state and the calculations remain unchanged. Focus, neutral
+  empty days, and missing-balance wording retain the existing product semantics.
+- Registered the formula's Phosphor icon in the curated icon map and added the existing refresh
+  glyph to the balances action; the Chromium geometry check now verifies both action icons.
 - Added `scripts/verify-usage-ui.cjs` to inspect actual markup/CSS in isolated Chromium with
   representative long activity, tables and model rows; no real profile or history is read.
-- Updated the layout allowlist for the two intentionally local Usage scrollers and the
-  existing browser-tab scroller; no browser UI implementation changed.
+- Updated the layout allowlist for the two intentionally local Usage scrollers; no browser
+  orchestration implementation changed.
 
 ## Validation
 
@@ -29,7 +33,10 @@ reported by ChatGPT. Estimated costs remain explicitly a comparison, not a bill.
 - `npm test -- --run test/renderer-usage.test.ts test/renderer-layout.test.ts` — 44 passed.
 - `npm run build` — passed (main, preload and renderer).
 - Live Electron dev with the canonical `chat-on-steroids` profile — verified the top summary,
-  long daily table and reported balances after the window finished restoring 91 sessions.
+  long daily table, separate cost surfaces, formula action icon and reported balances after the
+  window finished restoring 91 sessions.
+- The focused locale run passed 14/15 tests; its one existing Chinese static-label coverage
+  failure lists four Workspace descriptions absent from the baseline catalog, not Usage labels.
 - `npm run verify` — privacy, notices and typecheck passed; the broad Vitest run reported
   failures in existing browser/startup/window/pet suites outside this change and was stopped
   after those failures. It is not a passing full-suite claim.
