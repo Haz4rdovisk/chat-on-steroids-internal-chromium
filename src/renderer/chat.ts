@@ -81,8 +81,8 @@ const KIND_ICON: Record<ActivitySummary['kind'], string> = {
   input: 'i-monitor',
   clipboard: 'i-copy',
   session: 'i-steps',
-  agent: 'i-bolt',
-  other: 'i-bolt'
+  agent: 'i-agent',
+  other: 'i-agent'
 };
 
 /**
@@ -221,7 +221,7 @@ function paintComposerImages(): void {
   images.forEach((image, index) => {
     const tile = 'dataUrl' in image ? el('div', 'composer-image') : attachmentCard(image, true);
     if ('dataUrl' in image) { const preview = document.createElement('img'); preview.src = image.dataUrl; preview.alt = image.name; tile.append(preview); }
-    const remove = el('button', 'image-remove', '×'); remove.setAttribute('type', 'button'); ui(remove, 'aria-label', () => t("Remove {0}", [image.name]));
+    const remove = el('button', 'image-remove'); remove.append(icon('i-x')); remove.setAttribute('type', 'button'); ui(remove, 'aria-label', () => t("Remove {0}", [image.name]));
     remove.addEventListener('click', () => { imageDrafts.set(key, images.filter((_entry, at) => at !== index)); paintComposerImages(); });
     tile.append(remove); box.append(tile);
   });
@@ -234,14 +234,7 @@ function attachmentCard(file: InputAttachment, inComposer = false): HTMLElement 
     const tile = el('div', 'composer-image'); tile.append(image); return tile;
   }
   const tile = el('div', 'attachment-card'); tile.title = file.name;
-  const glyph = el('span', 'attachment-icon');
-  glyph.setAttribute('aria-hidden', 'true');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '24'); svg.setAttribute('height', '24');
-  const lines = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  lines.setAttribute('d', 'M7 3h10a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Zm1 6h8M8 13h8M8 17h5');
-  lines.setAttribute('fill', 'none'); lines.setAttribute('stroke', 'currentColor'); lines.setAttribute('stroke-width', '1.6'); lines.setAttribute('stroke-linecap', 'round');
-  svg.append(lines); glyph.append(svg);
+  const glyph = el('span', 'attachment-icon'); glyph.append(icon('i-file-text'));
   const details = el('div', 'attachment-details');
   details.append(el('div', 'attachment-name', file.name), el('div', 'attachment-kind', () => file.mimeType.startsWith('image/') ? t("Image") : t("File")));
   tile.append(glyph, details); return tile;
@@ -937,6 +930,9 @@ function paintDeliveryControls(): void {
   send.classList.toggle('is-plan-ready', !!preparedPlan && !stop);
   ui(send, 'title', () => stop && !working && pending ? t("Cancel delivery") : preparedPlan && !stop ? planAction : planMode && !stop ? t("Click to generate plan") : '');
   send.classList.toggle('is-stop', stop);
+  const sendIcon = send.querySelector<HTMLElement>('.send-icon')!;
+  sendIcon.classList.toggle('ph-arrow-up', !stop);
+  sendIcon.classList.toggle('ph-stop', stop);
   for (const button of $('sendOptions').querySelectorAll<HTMLElement>('[data-delivery]')) {
     button.setAttribute('aria-checked', String(button.dataset.delivery === (nativeFiles && working && $<HTMLSelectElement>('sendMode').value !== 'tool' ? 'after-turn' : $<HTMLSelectElement>('sendMode').value)));
   }
@@ -1944,7 +1940,7 @@ function eventBody(event: SessionEvent, context?: { id: string; current: () => b
           : t("Received by {0}; recorded when it acknowledged delivery", [event.to]));
       const summary = el('summary');
       const worker = event.from === 'prime' ? event.to : event.from;
-      const avatar = el('span', 'agent-avatar', worker.replace(/^worker-/, ''));
+      const avatar = el('span', 'agent-avatar'); avatar.append(icon('i-agent', 'ph-agent-avatar'));
       avatar.dataset.color = String([...worker].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 6);
       avatar.setAttribute('aria-hidden', 'true');
       summary.append(avatar, el('span', '', () => communicationTitle(event)));
@@ -3915,7 +3911,8 @@ export function initChat(next: Deps): void {
   fileToggle.id = 'filePanelToggle'; fileToggle.type = 'button'; fileToggle.hidden = true;
   fileToggle.append(icon('i-folder'));
   ui(fileToggle, 'aria-label', () => t('Toggle Files side panel')); fileToggle.setAttribute('aria-expanded', 'false');
-  const agentToggle = el('button', 'btn btn-icon', '◫') as HTMLButtonElement;
+  const agentToggle = el('button', 'btn btn-icon') as HTMLButtonElement;
+  agentToggle.append(icon('i-agent'));
   agentToggle.id = 'agentPanelToggle'; agentToggle.type = 'button'; agentToggle.hidden = true;
   ui(agentToggle, 'aria-label', () => t("Toggle sub-agent side panel")); agentToggle.setAttribute('aria-expanded', 'false');
   $('headerConnect').after(fileToggle, agentToggle);

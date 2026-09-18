@@ -1,3 +1,4 @@
+import './icons.css';
 import { ui, uiText, t, initLanguage } from './i18n.js';
 import { paintPluginRefreshReminder } from './plugin-refresh-reminder.js';
 import { initUsage, refreshUsage } from './usage.js';
@@ -8,6 +9,7 @@ import { initConnectionAdvanced } from './connection-popover.js';
 import { initSetupGuide } from './setup-guide.js';
 import { initAppearance } from './appearance.js';
 import { initPet } from './pet.js';
+import { initPets } from './pets.js';
 import type { AppearanceSettings } from '../shared/appearance.js';
 /**
  * Renderer. No Node, no filesystem, no network — everything goes through window.api.
@@ -48,7 +50,7 @@ declare global {
 
 const api = window.api;
 initLanguage();
-initPet();
+const pet = initPet(api, () => showTab('pets'));
 initSetupGuide();
 // Escape the translucent sidebar's backdrop-filter containing block.
 document.body.append($('connectionPopover'));
@@ -131,8 +133,9 @@ let setupKeySave: Promise<boolean> = Promise.resolve(true);
 // ------------------------------------------------------------------- tabs
 
 function showTab(name: string): void {
-  const settings = name !== 'chat' && name !== 'plugins';
-  document.querySelector<HTMLElement>('.app')!.dataset.screen = name === 'plugins' ? 'library' : settings ? 'settings' : 'chat';
+  const library = name === 'plugins' || name === 'pets';
+  const settings = name !== 'chat' && !library;
+  document.querySelector<HTMLElement>('.app')!.dataset.screen = library ? 'library' : settings ? 'settings' : 'chat';
   document.querySelector<HTMLElement>('.sidebar-brand')!.hidden = settings;
   $('sidebarPrimary').hidden = settings;
   $('workspaceSettings').hidden = false;
@@ -201,6 +204,7 @@ $('sessionList').addEventListener('click', event => {
 }, { capture: true });
 $('newChat').addEventListener('click', () => showTab('chat'));
 $('sidebarPlugins').addEventListener('click', () => showTab('plugins'));
+$('sidebarPets').addEventListener('click', () => showTab('pets'));
 $('addProject').addEventListener('click', () => showTab('chat'));
 $('composerFolder').addEventListener('click', () => $('addProject').click());
 let zoomFactor = 1;
@@ -314,7 +318,7 @@ function buildGroups(): void {
   // The only multi-agent exposure control there is. Chat settings used to carry a second
   // checkbox for the same flag, which this one had to mirror by hand.
   enabled.addEventListener('change', () => void save());
-  const agents = groupShell('agents', 'Sub-agents', 'i-bolt', enabled);
+  const agents = groupShell('agents', 'Sub-agents', 'i-agent', enabled);
 
   const tools = el('div', 'tools');
   const agentTools: Array<[string, string]> = [
@@ -1263,6 +1267,7 @@ function connectorCards(next: AppState, desktopExpanded: boolean): HTMLElement[]
 
     const head = optional ? document.createElement('summary') : el('div');
     head.className = 'connector-head';
+    if (optional) head.append(icon('i-chev', 'ico connector-chevron'));
     head.append(
       el('h4', '', surface.connectorName),
       el('span', `tag${surface.optional ? ' is-optional' : ''}`, () => t(surface.optional ? 'optional' : 'required')),
@@ -1652,11 +1657,8 @@ async function runChecks(): Promise<void> {
               ? 'check is-bad'
               : `check is-${check.status}`
         );
-        const mark = el(
-          'span',
-          'check-mark',
-          check.status === 'pass' ? '✓' : check.status === 'fail' ? '!' : check.status === 'skipped' ? '–' : '…'
-        );
+        const mark = el('span', 'check-mark');
+        mark.append(icon(check.status === 'pass' ? 'i-check' : check.status === 'fail' ? 'i-x' : check.status === 'skipped' ? 'i-minus' : 'i-more'));
         const body = el('div');
         body.append(el('strong', '', check.name), el('p', '', check.detail));
         li.append(mark, body);
@@ -1843,6 +1845,7 @@ $('updateExtension').addEventListener('click', () => {
 api.onStateChanged(apply);
 api.onLogEntry(addLogLine);
 api.onSwarmChanged(paintAgentFilter);
+api.onPetOverlayOpenOwner(screen => showTab(screen));
 
 async function refresh(): Promise<void> {
   const next = await run(api.getState());
@@ -1853,6 +1856,7 @@ buildGroups();
 initSidebarResize();
 initUsage();
 initPlugins(apply);
+initPets(api, pet);
 initBrowserPreferences();
 initChat({ save: () => save(), state: () => state });
 

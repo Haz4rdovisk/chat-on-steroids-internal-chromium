@@ -12,6 +12,11 @@ import path from 'node:path';
 type Handler = (event: unknown, payload: unknown) => Promise<unknown>;
 const handlers = new Map<string, Handler>();
 
+const petIpcMocks = vi.hoisted(() => ({
+  setEnabled: vi.fn((id: string, enabled: boolean) => ({ pets: [{ id, enabled }] })),
+  setOverlayVisible: vi.fn(async () => ({ visible: true, ready: true, activeCount: 1, activityCount: 0 }))
+}));
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: (channel: string, handler: Handler) => handlers.set(channel, handler),
@@ -34,6 +39,20 @@ vi.mock('electron', () => ({
 // This suite owns IPC behavior, not Electron's packaged-vs-checkout path discovery.
 vi.mock('../src/main/extension-path.js', () => ({ extensionDir: () => process.cwd() }));
 vi.mock('../src/main/browser.js', () => ({ openInPreferredBrowser: vi.fn(async () => 'chrome.exe') }));
+vi.mock('../src/main/pet-library.js', () => ({
+  deletePet: vi.fn(() => ({ pets: [] })),
+  importPet: vi.fn(async () => ({ pets: [] })),
+  loadPetAsset: vi.fn(async () => null),
+  petLibraryState: vi.fn(() => ({ pets: [] })),
+  setPetEnabled: petIpcMocks.setEnabled,
+  setPetFavorite: vi.fn(() => ({ pets: [] }))
+}));
+vi.mock('../src/main/pet-overlay.js', () => ({
+  petOverlayControlState: vi.fn(() => ({ visible: false, ready: true, activeCount: 0, activityCount: 0 })),
+  refreshPetOverlayActivities: vi.fn(),
+  refreshPetOverlayAppearance: vi.fn(),
+  setPetOverlayVisible: petIpcMocks.setOverlayVisible
+}));
 
 const { defaultConfig, getConfig, initConfigPath, saveConfig } = await import('../src/main/config.js');
 const { initSecretsPath, resetSecretsCacheForTests } = await import('../src/main/secrets.js');
@@ -381,6 +400,8 @@ beforeEach(async () => {
   vi.mocked(shell.openPath).mockReset().mockResolvedValue('');
   vi.mocked(shell.openExternal).mockReset().mockResolvedValue(undefined);
   vi.mocked(app.getVersion).mockReset().mockReturnValue('0.0.0');
+  petIpcMocks.setEnabled.mockClear();
+  petIpcMocks.setOverlayVisible.mockClear();
   resetSwarm();
   resetBridgeForTests();
   resetWorkspaces();
@@ -392,6 +413,20 @@ beforeEach(async () => {
     sessions: { ...defaultConfig().sessions, record: true },
     multiAgent: { enabled: true, maxWorkers: 3, allowUnattributedCalls: false, recoverAgentTabs: true }
   });
+});
+
+it('shows the desktop overlay when a pet is explicitly enabled', async () => {
+  const result = await handlers.get('pets:enabled')!(null, { id: 'tur-tur-sahur', enabled: true }) as any;
+  expect(result.ok).toBe(true);
+  expect(petIpcMocks.setEnabled).toHaveBeenCalledWith('tur-tur-sahur', true);
+  expect(petIpcMocks.setOverlayVisible).toHaveBeenCalledWith(true);
+});
+
+it('does not force global visibility when a pet is disabled', async () => {
+  const result = await handlers.get('pets:enabled')!(null, { id: 'tur-tur-sahur', enabled: false }) as any;
+  expect(result.ok).toBe(true);
+  expect(petIpcMocks.setEnabled).toHaveBeenCalledWith('tur-tur-sahur', false);
+  expect(petIpcMocks.setOverlayVisible).not.toHaveBeenCalled();
 });
 
 it('keeps origin history navigation separate from live revision cursors over IPC', async () => {

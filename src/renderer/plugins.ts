@@ -2,7 +2,7 @@ import { ui, t } from './i18n.js';
 import type { AppState } from '../shared/types.js';
 import type { SettingsPatch } from '../preload/index.js';
 import type { PluginSnapshot, PluginView, PluginCatalogEntry, PluginSource } from '../shared/plugins.js';
-import { $, el, run, toast } from './dom.js';
+import { $, el, icon, run, toast } from './dom.js';
 
 let snapshot: PluginSnapshot = { plugins: [], catalog: [], schemaRevision: 0 };
 let epoch = 0;
@@ -137,7 +137,7 @@ function renderInstalled(): void {
     foot.append(el('span', 'plugin-tool-count', () => t(count === 1 ? '{0} tool enabled' : '{0} tools enabled', [count])));
     title.append(foot); open.append(art(recipe?.icon ?? plugin.catalogId ?? 'custom'), title);
     const menu = document.createElement('details'); menu.className = 'plugin-menu';
-    const summary = el('summary', '', '•••'); ui(summary, 'aria-label', () => t("Actions for {0}", [plugin.name]));
+    const summary = el('summary'); summary.append(icon('i-more')); ui(summary, 'aria-label', () => t("Actions for {0}", [plugin.name]));
     const actions = el('div', 'plugin-menu-actions');
     actions.append(button(() => plugin.enabled ? t("Disable") : t("Enable"), async () => { await mutate(window.api.pluginsSetEnabled(plugin.id, !plugin.enabled)); }), button(() => t("Configure"), () => showConfigure(plugin)), button(() => t("Restart"), async () => { await mutate(window.api.pluginsRestart(plugin.id)); }), button(() => t("Update"), async () => { await mutate(window.api.pluginsUpdate(plugin.id)); }));
     const uninstall = button(() => t("Uninstall"), () => showUninstall(plugin)); uninstall.classList.add('plugin-destructive'); actions.append(uninstall);

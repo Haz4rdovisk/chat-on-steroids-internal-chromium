@@ -1,6 +1,6 @@
 import { ui, t } from './i18n.js';
 import type { SessionSummary, SessionEvent } from '../shared/session.js';
-import { el } from './dom.js';
+import { el, icon } from './dom.js';
 import { attachWorkPanelResize } from './work-panel-resize.js';
 
 /** A read-only second pane. Its selection never changes the main chat's composer. */
@@ -17,7 +17,7 @@ export function createAgentPanel(options: {
   ui(pane, 'aria-label', () => t("Sub-agents"));
   attachWorkPanelResize(options.host, pane);
   const head = el('div', 'agent-panel-header'); head.hidden = true;
-  const back = el('button', 'btn', '←'); ui(back, 'title', () => t("Back to sub-agents")); back.setAttribute('type', 'button');
+  const back = el('button', 'btn'); back.append(icon('i-back')); ui(back, 'title', () => t("Back to sub-agents")); back.setAttribute('type', 'button');
   back.setAttribute('aria-label', back.title);
   const title = el('strong');
   const body = el('div', 'agent-panel-body');
@@ -40,7 +40,10 @@ export function createAgentPanel(options: {
       if (!group.length) { body.append(el('p', 'meta', () => active ? t("No active sub-agents") : t("No recorded sub-agents"))); continue; }
       for (const worker of group) {
         const row = el('button', 'agent-panel-row'); row.setAttribute('type', 'button');
-        row.append(el('span', 'agent-avatar', worker.origin?.agentId?.replace(/^worker-/, '') ?? '•'), el('span', '', worker.title));
+        const avatar = el('span', 'agent-avatar'); avatar.append(icon('i-agent', 'ph-agent-avatar'));
+        avatar.dataset.color = String([...(worker.origin?.agentId ?? worker.id)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 6);
+        avatar.setAttribute('aria-hidden', 'true');
+        row.append(avatar, el('span', '', worker.title));
         row.title = worker.origin?.task || worker.title;
         row.onclick = () => void open(worker.id); body.append(row);
       }

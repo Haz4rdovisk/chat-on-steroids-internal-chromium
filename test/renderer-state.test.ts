@@ -1,6 +1,10 @@
 vi.mock('../src/renderer/workspace-terminal.js', () => ({ createWorkspaceTerminal: () => ({ update: vi.fn() }) }));
 // Native animation/media APIs are covered by pet DOM and real Electron tests.
-vi.mock('../src/renderer/pet.js', () => ({ initPet: () => () => {} }));
+vi.mock('../src/renderer/pet.js', () => ({
+  initPet: () => Object.assign(() => {}, {
+    toggle: vi.fn(), isVisible: () => false, isReady: () => true, refresh: vi.fn(), applyLibraryState: vi.fn()
+  })
+}));
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -97,6 +101,7 @@ it('does not overwrite a focused dirty settings field on an unsolicited state pu
   stateListener(structuredClone(state));
   expect(w.document.activeElement).toBe(multiAgent);
   expect(multiAgent.checked).toBe(true);
+  expect(w.document.querySelector('[data-group="agents"] .ph-robot')).not.toBeNull();
 
   const allowUnattributed = w.document.getElementById('allowUnattributedCalls') as HTMLInputElement;
   allowUnattributed.focus();

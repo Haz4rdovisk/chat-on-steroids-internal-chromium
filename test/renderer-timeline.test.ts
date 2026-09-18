@@ -1625,7 +1625,7 @@ it.each([false, true])('dismisses retired delivery errors in selected-chat=%s wi
   const retry = queue.querySelector<HTMLButtonElement>('[aria-label="Retry delivery"]')!;
   expect(retry.classList.contains('delivery-retry')).toBe(true);
   expect(retry.textContent).toBe('');
-  expect(retry.querySelector('use')?.getAttribute('href')).toBe('#i-retry');
+  expect(retry.querySelector('.ph-arrow-clockwise')).not.toBeNull();
   expect(w.document.getElementById('chatSend')!.getAttribute('aria-label')).not.toBe('Cancel delivery');
   (queue.querySelector('[title="Dismiss delivery notice"]') as HTMLButtonElement).click();
   await app.append([]);
@@ -1881,7 +1881,7 @@ it('keeps mixed tool and agent activity in one latest-action disclosure between 
   expect(group.open).toBe(false);
   expect(group.querySelector('.activity-title')!.textContent).toBe('Read README.md');
   expect(group.querySelector('.agent-communication summary')!.textContent).toContain('Message from worker-2');
-  expect(group.querySelector('.agent-avatar')).not.toBeNull();
+  expect(group.querySelector('.agent-avatar .ph-robot')).not.toBeNull();
   expect(group.querySelectorAll('.ev')).toHaveLength(3);
   await append([
     { seq: 5, time: T0 + 5000, source: 'extension', kind: 'progress', message: text('Now validating') },
@@ -2012,13 +2012,17 @@ it('stops directly from the empty composer without a second Stop menu action', a
   const input = w.document.getElementById('chatInput') as HTMLTextAreaElement;
   const send = w.document.getElementById('chatSend') as HTMLButtonElement;
   expect(send.getAttribute('aria-label')).toBe('Stop turn');
+  expect(send.querySelectorAll('.send-icon')).toHaveLength(1);
+  expect(send.querySelector('.send-icon')?.classList.contains('ph-stop')).toBe(true);
   input.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   await settle(); expect(stop).not.toHaveBeenCalled();
   input.value = 'Keep this draft'; input.dispatchEvent(new w.Event('input'));
   expect(send.getAttribute('aria-label')).toBe('Send message');
+  expect(send.querySelector('.send-icon')?.classList.contains('ph-arrow-up')).toBe(true);
   expect(w.document.getElementById('sendOptions')!.hidden).toBe(false);
   expect(w.document.getElementById('stopTurnAction')).toBeNull();
   input.value = ''; input.dispatchEvent(new w.Event('input'));
+  expect(send.querySelector('.send-icon')?.classList.contains('ph-stop')).toBe(true);
   expect(w.document.getElementById('sendOptions')!.hidden).toBe(false);
   send.click();
   await settle();

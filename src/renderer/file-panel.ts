@@ -231,12 +231,12 @@ export function createFilePanel(options: FilePanelOptions) {
   attachWorkPanelResize(options.host, pane);
 
   const refresh = el('button', 'btn btn-icon file-panel-refresh') as HTMLButtonElement;
-  refresh.type = 'button'; refresh.append(icon('i-pulse'));
+  refresh.type = 'button'; refresh.append(icon('i-retry'));
   ui(refresh, 'title', () => t('Refresh files')); ui(refresh, 'aria-label', () => t('Refresh files'));
 
   const toolbar = el('div', 'file-panel-toolbar');
-  const newFile = actionButton(() => t('New file'), 'i-plus', () => createEntry('file'));
-  const newFolder = actionButton(() => t('New folder'), 'i-folder', () => createEntry('directory'));
+  const newFile = actionButton(() => t('New file'), 'i-file-add', () => createEntry('file'));
+  const newFolder = actionButton(() => t('New folder'), 'i-folder-add', () => createEntry('directory'));
   const rename = actionButton(() => t('Rename'), 'i-pencil', renameSelection);
   const remove = actionButton(() => t('Delete'), 'i-trash', deleteSelection);
   const reveal = actionButton(() => t('Reveal'), 'i-out', revealSelection);
@@ -541,9 +541,11 @@ export function createFilePanel(options: FilePanelOptions) {
     row.setAttribute('aria-selected', String(selection.path === entry.path));
     row.tabIndex = selection.path === entry.path ? 0 : -1;
     if (entry.kind === 'directory') row.setAttribute('aria-expanded', String(expanded.has(entry.path)));
-    const disclosure = el('span', `file-tree-disclosure${entry.kind === 'directory' && expanded.has(entry.path) ? ' is-open' : ''}`);
+    const isOpen = entry.kind === 'directory' && expanded.has(entry.path);
+    const disclosure = el('span', `file-tree-disclosure${isOpen ? ' is-open' : ''}`);
     disclosure.setAttribute('aria-hidden', 'true');
-    row.append(disclosure, icon(entry.kind === 'directory' ? 'i-folder' : entry.kind === 'file' ? 'i-file' : 'i-ban', 'file-tree-icon'));
+    if (entry.kind === 'directory') disclosure.append(icon('i-chev', 'ph-file-disclosure'));
+    row.append(disclosure, icon(entry.kind === 'directory' ? (isOpen ? 'i-folder-open' : 'i-folder') : entry.kind === 'file' ? 'i-file' : 'i-ban', 'file-tree-icon'));
     row.append(el('span', 'file-tree-name', entry.name));
     if (entry.kind === 'file' && entry.bytes !== null) row.append(el('span', 'file-tree-size', humanBytes(entry.bytes)));
     row.title = entry.path;
@@ -576,7 +578,7 @@ export function createFilePanel(options: FilePanelOptions) {
     root.dataset.path = ''; root.dataset.kind = 'root';
     root.setAttribute('aria-level', '1'); root.setAttribute('aria-selected', String(selection.path === ''));
     root.tabIndex = selection.path === '' ? 0 : -1;
-    root.append(icon('i-folder', 'file-tree-icon'), el('strong', 'file-tree-name', project.name));
+    root.append(icon('i-folder-open', 'file-tree-icon'), el('strong', 'file-tree-name', project.name));
     root.title = project.path;
     root.onclick = () => void (async () => {
       if (editingPath && !(await leaveEditorIfNeeded())) return;
@@ -635,7 +637,7 @@ export function createFilePanel(options: FilePanelOptions) {
   }
 
   function previewTreeButton(): HTMLButtonElement {
-    const button = actionButton(() => t('Files'), 'i-folder', () => {
+    const button = actionButton(() => t('Files'), 'i-files', () => {
       body.classList.toggle('is-reading');
       button.setAttribute('aria-pressed', String(!body.classList.contains('is-reading')));
     });
@@ -654,7 +656,7 @@ export function createFilePanel(options: FilePanelOptions) {
     if (editablePreview(value)) {
       actions.append(actionButton(() => t('Edit'), 'i-pencil', () => startEditing(value)));
     }
-    const attach = actionButton(() => t('Attach'), 'i-plus', async () => {
+    const attach = actionButton(() => t('Attach'), 'i-attach', async () => {
       const expected = generation, current = project;
       if (!current) return;
       const deliver: ((attachment: InputAttachment) => unknown) | undefined = options.captureAttachment?.() ?? options.onAttach;
@@ -730,7 +732,7 @@ export function createFilePanel(options: FilePanelOptions) {
     editorDirtyBadge = dirty;
     titleWrap.append(name, dirty);
     const actions = el('div', 'file-preview-actions');
-    const save = actionButton(() => t('Save'), 'i-check', saveEditing);
+    const save = actionButton(() => t('Save'), 'i-save', saveEditing);
     save.classList.add('file-editor-save');
     save.disabled = true;
     editorSaveButton = save;

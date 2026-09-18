@@ -235,6 +235,7 @@ Paths in this section are repository-relative. Most mechanisms have `main`, `sha
 | External plugins | `src/main/plugins/{catalog,installer,manager,exposure,oauth}.ts`, `plugins-ipc.ts`, `plugin-refresh.ts`, `src/shared/{plugins,plugin-refresh}.ts`, `src/renderer/plugins.ts`. |
 | Renderer boundary | `src/main/ipc.ts`, `edit-context-menu.ts`, `src/preload/index.ts`; `src/renderer/{main,chat,dom,tool-result,timeline-scroll,sidebar-resize,browser-preferences,connection-popover,i18n}.ts`, `locales/{es,zh-CN}.json`, `index.html`, `styles.css`. |
 | Appearance | `src/shared/appearance.ts`, `src/main/appearance-schema.ts`, `src/renderer/appearance.ts`: bounded saved colors/typography, field-wise Settings merge, immediate semantic CSS projection. `window-layout.ts` shares native caption/backing colors. |
+| Desktop Pets | `src/main/{pet-library,pet-overlay}.ts`, `src/shared/{pets,pet-activity}.ts`, `src/preload/pet-overlay.ts`, `src/renderer/{pet-overlay,pet-machine,pet-choreography,pets,pet}.ts`: package validation, overlay host, task projection, animation and library controls. |
 | Native Desktop | `src/main/computer/{index,helper,browser-chords,windows-api,windows-capture,windows-apps,windows-keys}.ts`, `src/shared/windows-computer.ts`, `mcp/tools-desktop-{windows,macos}.ts`, `native/macos-desktop-helper/*`, `native/macos-desktop-addon/*`. |
 | Direct browser control | `src/main/browser-control.ts`, `mcp/tools-browser.ts`, `src/shared/browser-control.ts`, `extension/browser-control{,-page}.js`: short-lived RPCs, session-owned debugger tabs, bounded DOM/diagnostics and background input. |
 | Delivery/build | `src/main/{update,extension-path,version,logger,durable}.ts`, `electron.vite.config.ts`, `electron-builder.yml`, `scripts/*`, `.github/workflows/*`, `vitest.config.ts`. |
@@ -260,6 +261,7 @@ Paths in this section are repository-relative. Most mechanisms have `main`, `sha
 | Stop/block/finish | Stop command; `blocked-chats.ts` durable set; finish facts in recorded progress/session projection | Each names exact chat/turn; no false terminal event. |
 | Browser repair | `bridge.ts` process-memory episodes | Re-earn from live evidence; never restore an old reload token as action authority. |
 | Catalog/usage | Saved successful `chat-models`; derived `usage-cache`; live usage snapshot | Catalog is observation, not a send receipt; estimates are not provider billing. |
+| Pets | `pet-library.ts` / `state/pet-library.json` and installed `pets/` packages; overlay positions in its persistent Chromium partition | Main owns enabled/favorite membership and task snapshots; renderer owns per-pet position and animation. |
 | Connector refresh | `plugin-refresh.ts` / `state/plugin-refresh.json` | Exact installed app id + schema fingerprint, claimed before Refresh, verified after. |
 
 ## 5. Startup, configuration and shutdown
@@ -2343,30 +2345,48 @@ of appearance controls.
 
 ### Renderer and IPC
 
-`renderer/pet-machine.ts` owns the optional Tur Tur Sahur companion's gesture,
-animation and autonomous-action state. `renderer/pet.ts` projects it with Pointer
-Events and one visible-window animation clock. The composer launcher and context
-menu share visibility/position in the validated renderer preference
-`cos.ui.turTurPet.v1`. The machine's next frame/phase/decision deadline owns each
-wake: stationary sprites sleep until that deadline; travel and interpolated props
-retain display-frame updates. Menus, hidden documents and static reduced-motion
-poses park the clock. One pending timer or animation frame is cancelled on pause,
-interaction rescheduling and disposal. Deliberate frame holds count in full while
-unexpected stalls beyond the requested wake retain a 100 ms allowance. DOM paint
-only writes changed values; target/hit visibility is resolved once per paint.
-These preferences grant no backend permission. Hide, drag and viewport
-changes retire scene props synchronously. Reduced motion disables autonomous
-travel/actions while keeping static click feedback. Company targets are plain DOM
-text; bat, bin and hit effects carry no company logos. `pet-assets/animations.json`
-maps 96 local character frames with contact/release timing. Asset production and
-regeneration are documented in `docs/pet/PRODUCTION.md`; pet unit/DOM tests and
-`scripts/verify-pet-electron.cjs` cover this owner without provider conversations.
-`scripts/verify-pet-performance.cjs` measures the production pet in isolated
-Electron with unchanged artwork, process CPU deltas and actual animation wakes.
+`main/pet-library.ts` validates imported CoS Pets (`pet.json`, `atlas.png`,
+`animations.json`; 8×12 cells, 96 frames), and owns enabled/favorite membership.
+`main/pet-overlay.ts` hosts a transparent desktop-sized Pets window independent of
+the main window, projects exact session/swarm activity, and switches native mouse
+click-through only near interactive content. Its private persistent Chromium
+partition retains per-pet positions across restarts. `renderer/pet-overlay.ts`
+draws one 160×160 CSS background cell per pet from the native-size atlas, with
+pixel-exact frame offsets and `image-rendering: pixelated`; it does not scale the
+96-frame sheet down to a preview. `pet-overlay.html` loads its stylesheet as an
+external link so the overlay's restrictive CSP works in both Vite dev and the
+built renderer. `renderer/pet-machine.ts` owns gesture,
+animation and autonomous actions for both built-in and imported manifests;
+`pet-choreography.ts` positions text and effects for each manifest. Multiple pets
+may run together. A short click pokes the pet and restores/focuses the owner
+without changing its current screen; a drag does not raise the owner. A favorite
+anchors the task badge and compact tray. Its task rows keep state, title and
+summary on one line, scroll within a bounded height, and open their proven local
+session. Task transitions use the authored atlas: running/start → `spawn`,
+waiting/sleeping → `look`, failed/blocked → `angry`, and finished/review →
+`celebrate`; ordinary idle/walk behavior continues between transitions. The
+library's copied creation brief may reuse `$hatch-pet` for canonical-reference,
+generation and visual-QA discipline only. Its Codex 8×9/192×208/WebP contract is
+not import-compatible; the CoS 8×12/160×160/PNG manifest remains authoritative.
+`renderer/pet.ts` is only the main-window controller.
+Reduced motion disables autonomous travel/actions while retaining static click
+feedback. The machine's next frame/phase/decision deadline owns each wake:
+stationary sprites sleep until that deadline, while travel, carry, throw and
+interpolated props retain display-frame updates. Hidden documents and static
+reduced-motion poses park the clock. The overlay owns at most one pending timer or
+animation frame and cancels it on pause, interaction rescheduling and disposal.
+Asset production remains in `docs/pet/PRODUCTION.md`; unit/DOM tests plus
+`scripts/verify-pet-overlay-electron.cjs` check the bundled overlay without
+requiring a provider conversation, and `scripts/verify-pet-performance.cjs`
+measures actual animation wakes and process CPU with unchanged artwork.
 
-`renderer/main.ts` owns the shell/setup/settings; `chat.ts` owns sessions, composer and timeline.
+`renderer/main.ts` owns the shell/setup/settings; `chat.ts` owns sessions, composer and timeline;
+interface actions use the shared Phosphor glyph map in
+`renderer/dom.ts` and `renderer/icons.css`; keep the bespoke CoS mark, language flags and data
+visualizations distinct, but do not introduce a second ad-hoc action-icon family.
 Projects, workers, plans, model choice, usage and plugins have focused modules (§4). The renderer
-calls a fixed `preload/index.ts` allowlist into validated `ipc.ts`/`plugins-ipc.ts` handlers.
+calls a fixed `preload/index.ts` allowlist into validated
+`ipc.ts`/`plugins-ipc.ts` handlers.
 No arbitrary IPC invocation, Node access, filesystem path opening or renderer-side secret store.
 Changing the selected session synchronously retires prior data/control ownership and handoff.
 Keep the last painted transcript and images inert while the destination detail loads, then

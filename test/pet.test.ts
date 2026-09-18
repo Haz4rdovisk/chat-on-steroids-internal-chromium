@@ -41,6 +41,13 @@ describe('Tur Tur Sahur animation owner',()=>{
     const pet=create();pet.startAction('openai');pet.tick(60000);
     expect(pet.clock).toBe(100);expect(pet.state).toBe('walk');expect(pet.position.x-180).toBeLessThan(5);
   });
+  it('maps task transitions to authored reactions without replacing the normal idle loop',()=>{
+    const pet=create();advance(pet,500);
+    pet.react('spawn');expect(pet.state).toBe('spawn');advance(pet,500);expect(pet.state).toBe('idle');
+    pet.react('look');expect(pet.state).toBe('look');advance(pet,800);expect(pet.state).toBe('idle');
+    pet.react('angry');expect(pet.state).toBe('angry');advance(pet,1000);expect(pet.state).toBe('idle');
+    pet.react('celebrate');expect(pet.state).toBe('celebrate');
+  });
   it('distinguishes jitter clicks from drags, and rejects foreign pointer events',()=>{
     const pet=create();pet.beginPointer(1,{x:10,y:10});pet.movePointer(9,{x:200,y:10});
     pet.movePointer(1,{x:13,y:12});pet.endPointer(1);expect(pet.state).toBe('poke');expect(pet.position.x).toBe(180);

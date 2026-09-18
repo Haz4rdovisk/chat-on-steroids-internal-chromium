@@ -26,7 +26,8 @@ export function createWorkspaceTerminal() {
   };
   const add = button('i-plus', 'New terminal'), hide = button('i-x', 'Hide terminal');
   add.id = 'terminalNew'; hide.id = 'terminalHide';
-  const empty = el('button', 'btn terminal-empty', () => t('Open a terminal in this project')) as HTMLButtonElement;
+  const empty = el('button', 'btn terminal-empty') as HTMLButtonElement;
+  empty.append(icon('i-terminal'), el('span', '', () => t('Open a terminal in this project')));
   empty.type = 'button'; body.append(empty); bar.append(tabsHost, add, hide); panel.append(resize, bar, body); app.append(panel);
   const tabs = new Map<string, Tab>();
   const terminalTheme = () => {
