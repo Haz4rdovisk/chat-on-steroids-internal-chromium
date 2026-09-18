@@ -1533,6 +1533,7 @@ it('projects slash-selected Goal, Loop and Plan state on the compact composer op
   const summary = w.document.getElementById('composerSettingsSummary')!;
   const label = w.document.getElementById('composerModeLabel')!;
   const icon = w.document.getElementById('composerModeIcon')!;
+  const clear = w.document.getElementById('clearComposerMode') as HTMLButtonElement;
   const choose = async (command: string) => {
     input.value = `/${command}`;
     input.setSelectionRange(input.value.length, input.value.length);
@@ -1543,14 +1544,20 @@ it('projects slash-selected Goal, Loop and Plan state on the compact composer op
   };
 
   expect(label.hidden).toBe(true);
+  expect(clear.hidden).toBe(true);
+  expect(summary.contains(clear)).toBe(false);
   expect(summary.getAttribute('aria-label')).toBe('Chat options');
   expect(icon.classList.contains('ph-gear-six')).toBe(true);
   w.document.getElementById('createPlan')!.click();
   expect(label.textContent).toBe('Plan');
+  expect(clear.hidden).toBe(false);
+  expect(clear.getAttribute('aria-label')).toBe('Clear Plan');
   expect(icon.classList.contains('ph-list-checks')).toBe(true);
-  w.document.getElementById('createPlan')!.click();
+  clear.click();
+  expect(label.hidden).toBe(true);
   await choose('goal');
   expect(label.textContent).toBe('Goal');
+  expect(clear.getAttribute('aria-label')).toBe('Clear Goal');
   expect(summary.getAttribute('aria-label')).toBe('Chat options: Goal selected');
   expect(icon.classList.contains('ph-target')).toBe(true);
   await choose('loop');
@@ -1562,13 +1569,59 @@ it('projects slash-selected Goal, Loop and Plan state on the compact composer op
   expect(summary.getAttribute('aria-label')).toBe('Chat options: Loop and Plan selected');
   (w.document.querySelector('#automationSwitch [data-mode="goal"]') as HTMLButtonElement).click();
   expect(label.textContent).toBe('Goal + Plan');
+  expect(clear.getAttribute('aria-label')).toBe('Clear Goal + Plan');
   expect(summary.getAttribute('aria-label')).toBe('Chat options: Goal and Plan selected');
-  w.document.getElementById('createPlan')!.click();
-  expect(label.textContent).toBe('Goal');
-  (w.document.querySelector('#automationSwitch [data-mode="off"]') as HTMLButtonElement).click();
+  clear.click();
   expect(label.hidden).toBe(true);
+  expect(clear.hidden).toBe(true);
   expect(summary.getAttribute('aria-label')).toBe('Chat options');
   expect(icon.classList.contains('ph-gear-six')).toBe(true);
+});
+
+it('clears Goal, Loop and combined modes through their real session controls', async () => {
+  const { w, live } = await boot([]);
+  const api = (w as any).api;
+  const getSessionControls = api.getSessionControls;
+  api.getSessionControls = async (id: string) => {
+    const result = await getSessionControls(id);
+    result.data.objective = 'Keep this task text';
+    return result;
+  };
+  const automation = w.document.getElementById('chatAutomation') as HTMLSelectElement;
+  const objective = w.document.getElementById('sessionObjective') as HTMLTextAreaElement;
+  const plan = w.document.getElementById('createPlan') as HTMLButtonElement;
+  const clear = w.document.getElementById('clearComposerMode') as HTMLButtonElement;
+  const choose = (mode: 'goal' | 'loop') =>
+    w.document.querySelector<HTMLButtonElement>(`#automationSwitch [data-mode="${mode}"]`)!.click();
+
+  objective.value = 'Keep this task text';
+  choose('goal'); await settle();
+  expect(clear.getAttribute('aria-label')).toBe('Clear Goal');
+  clear.click(); await settle();
+  expect(automation.value).toBe('off');
+  expect(live.controlCalls.slice(-2)).toEqual([
+    { id: summary([]).id, action: 'goal' },
+    { id: summary([]).id, action: 'off' }
+  ]);
+
+  choose('loop'); await settle();
+  expect(clear.getAttribute('aria-label')).toBe('Clear Loop');
+  clear.click(); await settle();
+  expect(automation.value).toBe('off');
+  expect(live.controlCalls.slice(-2)).toEqual([
+    { id: summary([]).id, action: 'loop' },
+    { id: summary([]).id, action: 'off' }
+  ]);
+
+  choose('goal'); await settle();
+  plan.click();
+  expect(clear.getAttribute('aria-label')).toBe('Clear Goal + Plan');
+  clear.click(); await settle();
+  expect(automation.value).toBe('off');
+  expect(plan.getAttribute('aria-pressed')).toBe('false');
+  expect(clear.hidden).toBe(true);
+  expect(objective.value).toBe('Keep this task text');
+  expect(live.controlCalls.at(-1)).toEqual({ id: summary([]).id, action: 'off' });
 });
 
 it.each([true, false])('arms Compact as a removable composer pill and executes it only on Send (accepted=%s)', async accepted => {
@@ -1961,6 +2014,27 @@ it('keeps mixed tool and agent activity in one latest-action disclosure between 
   ]);
   expect(timeline.querySelectorAll('.tool-group')).toHaveLength(2);
   expect(timeline.children[0]!.className).toContain('ev-progress');
+});
+
+it('projects Phosphor command icons into collapsed activity disclosures', async () => {
+  const command = (seq: number, callId: string, kind: 'read' | 'run', title: string) => {
+    const event = toolCall(seq, callId) as Extract<SessionEvent, { kind: 'tool_call' }>;
+    return { ...event, call: { ...event.call, tool: kind === 'run' ? 'exec_command' : 'read',
+      summary: { ...event.call.summary, kind, title } } };
+  };
+  const { w } = await boot([
+    { seq: 1, time: T0, source: 'extension', kind: 'progress', message: text('Checking status') },
+    command(2, 'read-before-run', 'read', 'Read AGENTS.md'),
+    command(3, 'run-latest', 'run', 'Ran git status --short --branch'),
+    { seq: 4, time: T0 + 4000, source: 'extension', kind: 'progress', message: text('Confirming content') },
+    command(5, 'run-before-read', 'run', 'Ran rg --files'),
+    command(6, 'read-latest', 'read', 'Read /chat-on-steroids-enhanced')
+  ]);
+  const groups = [...w.document.querySelectorAll<HTMLDetailsElement>('.tool-group')];
+  expect(groups).toHaveLength(2);
+  expect(groups[0]!.querySelector('.activity-symbol .tool-ico.ph-terminal-window')).not.toBeNull();
+  expect(groups[1]!.querySelector('.activity-symbol .tool-ico.ph-eye')).not.toBeNull();
+  expect(groups.every(group => group.querySelector('.activity-symbol')!.children.length === 1)).toBe(true);
 });
 
 it('controls the selected session without submitting another user message', async () => {
@@ -2485,10 +2559,12 @@ it('cancels pending planning without replacing the draft with a late result', as
   const input = w.document.getElementById('chatInput') as HTMLTextAreaElement;
   input.value = 'Keep this draft';
   const plan = w.document.getElementById('createPlan') as HTMLButtonElement;
+  const clear = w.document.getElementById('clearComposerMode') as HTMLButtonElement;
   plan.click(); await settle();
   const requestId = api.draftTaskPlan.mock.calls[0][2];
   expect(plan.getAttribute('aria-pressed')).toBe('true');
-  plan.click();
+  expect(clear.disabled).toBe(false);
+  clear.click();
   expect(api.cancelTaskRequest).toHaveBeenCalledWith(requestId);
   progress({ requestId, phase: 'generating', text: 'Stale cancelled plan' });
   expect(w.document.getElementById('taskPlanPreview')!.textContent).not.toContain('Stale cancelled plan');

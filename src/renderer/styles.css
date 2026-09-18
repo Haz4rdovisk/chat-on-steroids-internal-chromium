@@ -88,7 +88,8 @@
 .skill-library-icon .ico { width: 26px; height: 26px; font-size: 26px; }
 .skill-library-card .plugin-card-foot { margin-top: auto; padding-top: 12px; color: var(--soft); font-size: calc(11px * var(--text-scale, 1)); }
 .skill-library-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skill-library-source { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin-left: auto; color: var(--soft); white-space: nowrap; }
+.skill-library-source { display: inline-flex; align-items: center; gap: 5px; min-width: 0; flex: 0 1 auto; margin-left: auto; color: var(--soft); white-space: nowrap; }
+.skill-library-source > span { overflow: hidden; text-overflow: ellipsis; }
 .skill-library-source .ico { font-size: 13px; }
 .skill-library-source.is-current .ico { color: var(--green); }
 .skill-library-source.is-error .ico { color: var(--red); }
@@ -2052,9 +2053,10 @@ input[readonly] {
 .composer-selected-skill:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--edge)); background: color-mix(in srgb, var(--accent) 14%, var(--card)); }
 .composer-selected-skill-icon { width: 15px; height: 15px; flex: none; color: var(--accent); }
 .composer-selected-skill-title { min-width: 0; overflow: hidden; font-size: calc(12px * var(--text-scale, 1)); font-weight: 500; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.composer-selected-skill-remove { display: grid; place-items: center; flex: none; width: 20px; height: 20px; padding: 4px; border: 0; border-radius: 50%; background: transparent; color: var(--soft); cursor: pointer; }
-.composer-selected-skill-remove:hover { background: var(--hover); color: var(--ink); }
-.composer-selected-skill-remove .ico { width: 12px; height: 12px; }
+.composer-selected-skill-remove, .composer-mode-clear { display: grid; place-items: center; flex: none; width: 20px; height: 20px; padding: 4px; border: 0; border-radius: 50%; background: transparent; color: var(--soft); cursor: pointer; }
+.composer-selected-skill-remove:hover, .composer-mode-clear:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.composer-selected-skill-remove:focus-visible, .composer-mode-clear:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.composer-selected-skill-remove .ico, .composer-mode-clear .ico { width: 12px; height: 12px; font-size: 12px; }
 .skill-autocomplete { position: absolute; z-index: 46; left: -1px; right: -1px; bottom: calc(100% + 8px); max-height: min(360px, 44vh); overflow-y: auto; padding: 8px; border: 1px solid var(--edge); border-radius: 20px; background: var(--card); box-shadow: 0 14px 40px #0006; scrollbar-gutter: stable; }
 .skill-autocomplete[hidden] { display: none; }
 .slash-menu-option { display: flex; width: 100%; min-height: 36px; align-items: center; gap: 9px; padding: 6px 8px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
@@ -2968,7 +2970,9 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .subhead-note.is-working { display: flex; align-items: center; gap: 8px; }
 .subhead-note.is-working::before { content: ''; width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; animation: working-pulse 1.4s ease-in-out infinite; }
 .composer-menu[open] > .composer-popover { transform-origin: bottom right; animation: surface-in 140ms ease-out; }
-.app[data-screen='settings'] .panel.is-active, .app[data-screen='settings'] [data-view='settings']:not([hidden]) { animation: surface-in 160ms ease-out; }
+.app[data-screen='settings'] .panel.is-active:not([data-panel='chat']),
+.app[data-screen='library'] .panel.is-active { animation: surface-in 160ms ease-out; }
+.app[data-screen='settings'] [data-view='settings']:not([hidden]) { animation: surface-in 160ms ease-out; }
 .pending-message.is-entering { animation: message-in 160ms ease-out; }
 .send-button { transition: background 120ms ease, transform 120ms ease; }
 .send-button:active { transform: scale(.94); }
@@ -3122,9 +3126,14 @@ select option:disabled { color: var(--soft); opacity: .55; }
 select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink); }
 
 .session-controls-menu { padding: 8px 0 0; margin-top: 8px; border-top: 1px solid var(--line); }
+.composer-mode-control { display: flex; min-width: 0; align-items: center; border-radius: 8px; }
+.composer-mode-control[data-mode-active] { padding-inline-end: 6px; background: color-mix(in srgb, var(--accent) 14%, var(--card)); }
+#composerSettings { min-width: 0; flex: 1 1 auto; }
 #composerSettings > summary { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; }
 #composerSettings > summary .ico { width: 20px; height: 20px; font-size: 20px; }
-#composerSettings > summary[data-mode-active] { display: flex; width: auto; max-width: 154px; gap: 6px; padding-inline: 9px 10px; background: color-mix(in srgb, var(--accent) 14%, var(--card)); color: var(--ink); }
+#composerSettings > summary[data-mode-active] { display: flex; width: 100%; max-width: 154px; gap: 6px; padding-inline: 9px 6px; background: transparent; color: var(--ink); }
+.composer-mode-clear[hidden] { display: none; }
+.composer-mode-clear:disabled { opacity: .5; cursor: default; }
 #composerModeLabel { min-width: 0; overflow: hidden; font-size: calc(12px * var(--text-scale, 1)); font-weight: 560; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
 #composerModeLabel[hidden] { display: none; }
 #composerSettings .composer-popover { width: 280px; left: 50%; right: auto; translate: -50% 0; transform-origin: bottom center; max-height: min(520px, 70vh); overflow-y: auto; }

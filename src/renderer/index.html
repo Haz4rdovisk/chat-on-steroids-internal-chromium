@@ -263,11 +263,11 @@
         <section class="panel plugins-panel skills-panel" data-panel="skills">
           <div class="plugins-content">
             <header class="plugin-page-head"><div><h1>Skills</h1><p>Reusable instructions for the work you do in Chat On Steroids.</p></div><div class="plugin-search-actions"><label class="plugin-search"><i class="ico ph ph-magnifying-glass" aria-hidden="true"></i><input id="skillsSearch" type="search" placeholder="Search skills" aria-label="Search skills" /></label><details class="plugin-menu skill-import-menu"><summary class="btn plugin-add" aria-label="Import a skill" title="Import a skill"><i class="ico ph ph-plus" aria-hidden="true"></i></summary><div class="plugin-menu-actions"><button class="btn" id="skillsImportFolder" type="button">Import folder</button><button class="btn" id="skillsImportFile" type="button">Import SKILL.md</button><button class="btn" id="skillsImportGithub" type="button">Import from GitHub</button></div></details></div></header>
-            <div class="plugin-refresh-guide pet-import-guide"><p>Import a folder, a standalone SKILL.md, or a public GitHub skill. CoS checks GitHub skills when you open this page; installing an update stays your choice.</p></div>
+            <div class="plugin-refresh-guide pet-import-guide"><p>Import a folder, a standalone SKILL.md, or a public GitHub skill. Local skills can be linked to their GitHub source to check for updates; installing an update stays your choice.</p></div>
             <dialog class="plugin-dialog pet-delete-dialog" id="skillGithubDialog" aria-labelledby="skillGithubTitle">
               <div class="plugin-dialog-head"><h2 id="skillGithubTitle">Import from GitHub</h2><button class="btn" id="skillGithubClose" type="button">Close</button></div>
               <form id="skillGithubForm" class="plugin-dialog-body">
-                <p>Paste a public GitHub folder link or a link to its SKILL.md. The complete skill folder will be copied to your CoS library.</p>
+                <p id="skillGithubDescription">Paste a public GitHub folder link or a link to its SKILL.md. The complete skill folder will be copied to your CoS library.</p>
                 <label class="plugin-field" for="skillGithubUrl">GitHub URL<input id="skillGithubUrl" type="url" required autocomplete="url" spellcheck="false" placeholder="https://github.com/owner/repo/tree/main/skill" /></label>
                 <p id="skillGithubError" class="plugin-error" role="alert" hidden></p>
                 <div class="pet-delete-actions"><button class="btn" id="skillGithubCancel" type="button">Cancel</button><button class="btn btn-solid" id="skillGithubSubmit" type="submit">Import skill</button></div>
@@ -968,30 +968,33 @@
                   </div>
                 </details>
                 <div class="composer-options">
-                  <details class="composer-menu" id="composerSettings">
-                    <summary id="composerSettingsSummary" aria-label="Chat options" title="Chat options"><i class="ico ph ph-gear-six" id="composerModeIcon" aria-hidden="true"></i><span id="composerModeLabel" aria-live="polite" hidden></span></summary>
-                    <div class="composer-popover">
-                      <div class="automation-switch" id="automationSwitch" role="radiogroup" aria-label="Chat mode">
-                        <button type="button" role="radio" aria-checked="true" data-mode="off" data-keep-menu="true">Off</button>
-                        <button type="button" role="radio" aria-checked="false" data-mode="goal" data-keep-menu="true">Goal</button>
-                        <button type="button" role="radio" aria-checked="false" data-mode="loop" data-keep-menu="true">Loop</button>
-                        </div><select hidden id="chatAutomation" aria-label="Chat automation"><option value="off">Off</option><option value="goal">Goal</option><option value="loop">Loop</option></select>
-                      <label id="loopDeliveryRow" hidden>Pro Loop delivery<select id="loopDelivery"><option value="finish">Only finish</option><option value="after-turn">After this turn + finish</option></select></label>
-              <div id="sessionControls" hidden>
-                <div class="session-controls-menu">
-                  <label for="sessionObjective">This chat's goal</label>
-                  <textarea dir="auto" id="sessionObjective" rows="3" maxlength="16000" placeholder="What should this chat achieve?"></textarea>
-                  <button id="saveSessionObjective" data-keep-menu="true" type="button"><i class="ico ph ph-check" aria-hidden="true"></i><span>Save task</span></button>
-                  <select hidden id="sessionObjectiveMode" aria-label="Goal behavior"><option value="goal">Goal · stop when complete</option><option value="loop">Loop · keep going</option></select>
-                  <button id="createPlan" type="button"><i class="ico ph ph-chat-circle" aria-hidden="true"></i><span>Create plan</span></button>
-                  <button id="queueAtFinish" type="button" hidden><i class="ico ph ph-clock" aria-hidden="true"></i><span>Queue at Session finish</span></button>
-                  <button id="compactSession" type="button"><i class="ico ph ph-copy" aria-hidden="true"></i><span>Compact &amp; resume</span></button>
-                  <button id="cancelCompaction" type="button" hidden><i class="ico ph ph-x" aria-hidden="true"></i><span>Cancel compaction</span></button>
-                  <p id="sessionControlStatus" role="status"></p>
+                  <div class="composer-mode-control" id="composerModeControl">
+                    <details class="composer-menu" id="composerSettings">
+                      <summary id="composerSettingsSummary" aria-label="Chat options" title="Chat options"><i class="ico ph ph-gear-six" id="composerModeIcon" aria-hidden="true"></i><span id="composerModeLabel" aria-live="polite" hidden></span></summary>
+                      <div class="composer-popover">
+                        <div class="automation-switch" id="automationSwitch" role="radiogroup" aria-label="Chat mode">
+                          <button type="button" role="radio" aria-checked="true" data-mode="off" data-keep-menu="true">Off</button>
+                          <button type="button" role="radio" aria-checked="false" data-mode="goal" data-keep-menu="true">Goal</button>
+                          <button type="button" role="radio" aria-checked="false" data-mode="loop" data-keep-menu="true">Loop</button>
+                          </div><select hidden id="chatAutomation" aria-label="Chat automation"><option value="off">Off</option><option value="goal">Goal</option><option value="loop">Loop</option></select>
+                        <label id="loopDeliveryRow" hidden>Pro Loop delivery<select id="loopDelivery"><option value="finish">Only finish</option><option value="after-turn">After this turn + finish</option></select></label>
+                <div id="sessionControls" hidden>
+                  <div class="session-controls-menu">
+                    <label for="sessionObjective">This chat's goal</label>
+                    <textarea dir="auto" id="sessionObjective" rows="3" maxlength="16000" placeholder="What should this chat achieve?"></textarea>
+                    <button id="saveSessionObjective" data-keep-menu="true" type="button"><i class="ico ph ph-check" aria-hidden="true"></i><span>Save task</span></button>
+                    <select hidden id="sessionObjectiveMode" aria-label="Goal behavior"><option value="goal">Goal · stop when complete</option><option value="loop">Loop · keep going</option></select>
+                    <button id="createPlan" type="button"><i class="ico ph ph-chat-circle" aria-hidden="true"></i><span>Create plan</span></button>
+                    <button id="queueAtFinish" type="button" hidden><i class="ico ph ph-clock" aria-hidden="true"></i><span>Queue at Session finish</span></button>
+                    <button id="compactSession" type="button"><i class="ico ph ph-copy" aria-hidden="true"></i><span>Compact &amp; resume</span></button>
+                    <button id="cancelCompaction" type="button" hidden><i class="ico ph ph-x" aria-hidden="true"></i><span>Cancel compaction</span></button>
+                    <p id="sessionControlStatus" role="status"></p>
+                  </div>
                 </div>
-              </div>
-                    </div>
-                  </details>
+                      </div>
+                    </details>
+                    <button class="composer-mode-clear" id="clearComposerMode" type="button" aria-label="Chat options" title="Chat options" hidden><i class="ico ph ph-x" aria-hidden="true"></i></button>
+                  </div>
                 <div class="context-meter" id="contextMeter">
                   <button type="button" id="contextMeterButton" aria-label="Estimated session context" aria-expanded="false" aria-controls="contextMeterInfo">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle class="context-track" cx="8" cy="8" r="6"/><circle id="contextMeterArc" cx="8" cy="8" r="6" stroke-dasharray="0 37.7"/></svg>

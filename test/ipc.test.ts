@@ -18,6 +18,7 @@ const petIpcMocks = vi.hoisted(() => ({
 }));
 const githubSkillIpcMocks = vi.hoisted(() => ({
   import: vi.fn(async (_url: string) => [{ id: 'review', name: 'Review', description: '', path: '/skills/review/SKILL.md', origin: null }]),
+  link: vi.fn(async (_id: string, _url: string) => [{ id: 'review', name: 'Review', description: '', path: '/skills/review/SKILL.md', origin: null }]),
   check: vi.fn(async (_id: string) => [{ id: 'review', originRevision: 'b'.repeat(64), state: 'available' as const, checkedAt: 1 }]),
   update: vi.fn(async (_id: string, _trash: (directory: string) => Promise<void>) => ({ status: 'current' as const, skills: [] }))
 }));
@@ -60,6 +61,7 @@ vi.mock('../src/main/pet-overlay.js', () => ({
 }));
 vi.mock('../src/main/skill-github.js', () => ({
   importGitHubSkill: githubSkillIpcMocks.import,
+  linkGitHubSkill: githubSkillIpcMocks.link,
   checkGitHubSkillUpdates: githubSkillIpcMocks.check,
   updateGitHubSkill: githubSkillIpcMocks.update
 }));
@@ -415,6 +417,7 @@ beforeEach(async () => {
   petIpcMocks.setEnabled.mockClear();
   petIpcMocks.setOverlayVisible.mockClear();
   githubSkillIpcMocks.import.mockClear();
+  githubSkillIpcMocks.link.mockClear();
   githubSkillIpcMocks.check.mockClear();
   githubSkillIpcMocks.update.mockClear();
   resetSwarm();
@@ -479,6 +482,10 @@ it('exposes only validated GitHub import and exact-skill update requests to the 
   expect(githubSkillIpcMocks.import).toHaveBeenCalledWith(url);
   expect((await handlers.get('skills:githubImport')!(null, { url: '' }) as any).ok).toBe(false);
   expect((await handlers.get('skills:githubImport')!(null, { url, path: 'C:/outside' }) as any).ok).toBe(false);
+  expect(await handlers.get('skills:githubLink')!(null, { id: 'review', url })).toMatchObject({ ok: true, data: [{ id: 'review' }] });
+  expect(githubSkillIpcMocks.link).toHaveBeenCalledWith('review', url);
+  expect((await handlers.get('skills:githubLink')!(null, { id: '../review', url }) as any).ok).toBe(false);
+  expect((await handlers.get('skills:githubLink')!(null, { id: 'review', url, path: 'C:/outside' }) as any).ok).toBe(false);
   expect(await handlers.get('skills:githubCheck')!(null, { id: 'review' })).toMatchObject({ ok: true, data: [{ state: 'available' }] });
   expect(githubSkillIpcMocks.check).toHaveBeenCalledWith('review');
   expect((await handlers.get('skills:githubCheck')!(null, { id: '../review' }) as any).ok).toBe(false);

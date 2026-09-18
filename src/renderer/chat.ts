@@ -1138,8 +1138,10 @@ function openingLoopDelivery(): boolean | undefined {
   return selectedId === null ? $<HTMLSelectElement>('loopDelivery').value === 'after-turn' : undefined;
 }
 function paintComposerMode(): void {
-  const automation = $<HTMLSelectElement>('chatAutomation').value;
-  const plan = taskPlans.has(draftKey());
+  const automationSelect = $<HTMLSelectElement>('chatAutomation');
+  const automation = automationSelect.value;
+  const planDraft = taskPlans.get(draftKey());
+  const plan = !!planDraft;
   const state = automation === 'goal'
     ? plan
       ? { label: 'Goal + Plan', description: 'Chat options: Goal and Plan selected', icon: 'target' }
@@ -1154,15 +1156,24 @@ function paintComposerMode(): void {
   const summary = $('composerSettingsSummary');
   const label = $('composerModeLabel');
   const modeIcon = $('composerModeIcon');
+  const control = $('composerModeControl');
+  const clear = $<HTMLButtonElement>('clearComposerMode');
   summary.toggleAttribute('data-mode-active', !!state);
+  control.toggleAttribute('data-mode-active', !!state);
   modeIcon.className = `ico ph ph-${state?.icon ?? 'gear-six'}`;
   if (state) {
     ui(label, 'textContent', () => t(state.label));
     ui(summary, 'aria-label', () => t(state.description));
     ui(summary, 'title', () => t(state.description));
+    ui(clear, 'aria-label', () => t('Clear {0}', [state.label]));
+    ui(clear, 'title', () => t('Clear {0}', [state.label]));
     label.hidden = false;
+    clear.hidden = false;
+    clear.disabled = planDraft?.sending === true || (automation !== 'off' && automationSelect.disabled);
   } else {
     label.hidden = true;
+    clear.hidden = true;
+    clear.disabled = false;
     ui(label, 'textContent', () => '');
     ui(summary, 'aria-label', () => t('Chat options'));
     ui(summary, 'title', () => t('Chat options'));
@@ -2504,7 +2515,7 @@ function groupToolRows(rows: HTMLElement[], scope = selectedId, groups = toolGro
     const label = latestHead?.querySelector('b, span:not(.agent-avatar)')?.textContent || t("Activity");
     group.querySelector('.activity-title')!.textContent = label;
     ui(group.querySelector('summary')!, 'title', () => t("{0} actions · {1}", [end - i, label]));
-    const symbol = latestHead?.querySelector('svg, .agent-avatar');
+    const symbol = latestHead?.querySelector('.tool-ico, .thinking-ico, .agent-avatar');
     group.querySelector('.activity-symbol')!.replaceChildren(...(symbol ? [symbol.cloneNode(true)] : []));
     reconcileChildren(group.lastElementChild!, rows.slice(i, end));
     grouped.push(group); i = end;
@@ -4015,6 +4026,18 @@ export function initChat(next: Deps): void {
     const select = $<HTMLSelectElement>('chatAutomation');
     select.value = button.dataset.mode!;
     select.dispatchEvent(new Event('change'));
+  });
+  $('clearComposerMode').addEventListener('click', () => {
+    const automation = $<HTMLSelectElement>('chatAutomation');
+    const plan = taskPlans.get(draftKey());
+    if (plan?.sending || (automation.value !== 'off' && automation.disabled)) return;
+    if (plan) cancelTaskPlan();
+    if (automation.value !== 'off') {
+      automation.value = 'off';
+      automation.dispatchEvent(new Event('change'));
+    }
+    $<HTMLDetailsElement>('composerSettings').open = false;
+    $<HTMLTextAreaElement>('chatInput').focus();
   });
   $('chatAutomation').addEventListener('change', async () => {
     goalIntentGeneration++;

@@ -57,6 +57,18 @@ it('searches whole settings sections without empty headings, orphaned controls o
   expect(document.getElementById('settingsSearchEmpty')!.hidden).toBe(true);
 });
 
+it('gives Plugins, Skills and Pets the same restrained page entrance as Settings', () => {
+  expect(rule(".app[data-screen='library'] .panel.is-active")).toContain('animation: surface-in 160ms ease-out');
+  expect(document.querySelectorAll("[data-panel='plugins'], [data-panel='skills'], [data-panel='pets']")).toHaveLength(3);
+  expect(css).toContain('@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important;');
+});
+
+it('animates Agents & automation only at its inner view boundary', () => {
+  expect(css).toContain(".app[data-screen='settings'] .panel.is-active:not([data-panel='chat']),\n.app[data-screen='library'] .panel.is-active { animation: surface-in 160ms ease-out; }");
+  expect(rule(".app[data-screen='settings'] [data-view='settings']:not([hidden])")).toContain('animation: surface-in 160ms ease-out');
+  expect(css).not.toContain(".app[data-screen='settings'] .panel.is-active, .app[data-screen='settings'] [data-view='settings']");
+});
+
 it('limits the existing tool-detail preference to handoff briefs', () => {
   const toggle = document.getElementById('goalIncludeToolCalls') as HTMLInputElement;
   expect(toggle.type).toBe('checkbox');
@@ -68,10 +80,12 @@ it('limits the existing tool-detail preference to handoff briefs', () => {
 });
 
 it('keeps the context circle in the gear group rather than an auto-placed composer grid cell', () => {
-  const group = document.getElementById('composerSettings')!.parentElement!;
+  const group = document.getElementById('composerModeControl')!.parentElement!;
   expect(group.classList.contains('composer-options')).toBe(true);
   expect(document.getElementById('contextMeter')!.parentElement).toBe(group);
   expect(document.getElementById('contextMeterInfo')!.parentElement?.id).toBe('contextMeter');
+  expect(document.getElementById('clearComposerMode')!.parentElement?.id).toBe('composerModeControl');
+  expect(document.getElementById('composerSettingsSummary')!.contains(document.getElementById('clearComposerMode'))).toBe(false);
 });
 
 it('does not expose a periodic Astra continuation outside session_finish', () => {

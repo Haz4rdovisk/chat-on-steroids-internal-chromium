@@ -35,9 +35,14 @@ app.whenReady().then(async () => {
       settings.toggleAttribute('data-mode-active', !!mode);
       modeLabel.hidden = !mode; modeLabel.textContent = mode;
       await new Promise(resolve => requestAnimationFrame(resolve));
-      const plus = rect('#attachmentMenu > summary'), gear = rect('#composerSettings > summary'), circle = rect('#contextMeterButton'), tooltip = rect('#contextMeterInfo'), input = rect('#chatInput'), model = rect('#modelMenu > summary'), send = rect('#chatSend');
+      const clear = document.getElementById('clearComposerMode');
+      document.getElementById('composerModeControl').toggleAttribute('data-mode-active', !!mode);
+      clear.hidden = !mode;
+      const plus = rect('#attachmentMenu > summary'), gear = rect('#composerSettings > summary'), modeControl = rect('#composerModeControl'), clearControl = rect('#clearComposerMode'), circle = rect('#contextMeterButton'), tooltip = rect('#contextMeterInfo'), input = rect('#chatInput'), model = rect('#modelMenu > summary'), send = rect('#chatSend');
       output.push({width, images, skills, mode, plusWidth: plus.width, gearWidth: gear.width, gearHeight: gear.height, circleWidth: circle.width,
-        plusGearGap: gear.left - plus.right, gearCircleGap: circle.left - gear.right,
+        modeControlWidth: modeControl.width, clearWidth: clearControl.width, clearRightInset: modeControl.right - clearControl.right,
+        clearCenterDifference: Math.abs((clearControl.top + clearControl.bottom - gear.top - gear.bottom) / 2),
+        plusGearGap: modeControl.left - plus.right, gearCircleGap: circle.left - modeControl.right,
         plusCenterDifference: Math.abs((plus.top + plus.bottom - gear.top - gear.bottom) / 2),
         circleCenterDifference: Math.abs((circle.top + circle.bottom - gear.top - gear.bottom) / 2),
         tooltipCenterDifference: Math.abs((tooltip.left + tooltip.right - circle.left - circle.right) / 2),
@@ -49,7 +54,13 @@ app.whenReady().then(async () => {
   })()`);
   for (const row of results) {
     assert.deepEqual([row.plusWidth, row.circleWidth, row.gearHeight], [36, 36, 36], JSON.stringify(row));
-    if (row.mode) assert.ok(row.gearWidth > 36 && row.gearWidth <= 154, JSON.stringify(row));
+    if (row.mode) {
+      assert.ok(row.gearWidth > 36 && row.gearWidth <= 154, JSON.stringify(row));
+      assert.equal(row.clearWidth, 20, JSON.stringify(row));
+      assert.equal(row.clearRightInset, 6, JSON.stringify(row));
+      assert.ok(row.clearCenterDifference < 0.1, JSON.stringify(row));
+      assert.ok(Math.abs(row.modeControlWidth - row.gearWidth - 26) < 0.1, JSON.stringify(row));
+    }
     else assert.equal(row.gearWidth, 36, JSON.stringify(row));
     assert.equal(row.plusGearGap, 8, 'Attachment and options have one toolbar gap');
     assert.equal(row.gearCircleGap, 4, 'Gear and context form a compact pair');

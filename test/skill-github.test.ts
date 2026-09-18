@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseGitHubSkillUrl } from '../src/shared/skills.js';
-import { checkGitHubSkillUpdates, importGitHubSkill, updateGitHubSkill } from '../src/main/skill-github.js';
+import { checkGitHubSkillUpdates, importGitHubSkill, linkGitHubSkill, updateGitHubSkill } from '../src/main/skill-github.js';
 import { importSkillPackage, initSkillsPath, listManagedSkills, removeSkill } from '../src/main/skills.js';
 
 let userData = '';
@@ -141,6 +141,54 @@ it('detects a changed resource even when SKILL.md has not changed', async () => 
     { id: 'pet', originRevision: installed.origin!.revision, state: 'available' }
   ]);
   expect(await fs.readFile(path.join(userData, 'skills/pet/references/guide.md'), 'utf8')).toBe('First guide');
+});
+
+it('links an older local copy without replacing files, then offers its missing GitHub resources', async () => {
+  const github = githubFixture(); vi.stubGlobal('fetch', github.request);
+  const source = path.join(userData, 'sources/pet');
+  await fs.mkdir(source, { recursive: true });
+  const skill = Buffer.from('---\nname: Test Pet\ndescription: Version one.\n---\nUse guide.\n');
+  await fs.writeFile(path.join(source, 'SKILL.md'), skill);
+  await importSkillPackage(source);
+  expect((await listManagedSkills())[0]!.origin).toBeNull();
+  const linked = (await linkGitHubSkill('pet', 'https://github.com/acme/skills/tree/main/pet'))[0]!;
+  expect(linked.origin?.url).toBe('https://github.com/acme/skills/tree/main/pet');
+  expect(await fs.readFile(path.join(userData, 'skills/pet/SKILL.md'))).toEqual(skill);
+  await expect(fs.stat(path.join(userData, 'skills/pet/references/guide.md'))).rejects.toMatchObject({ code: 'ENOENT' });
+  expect(await checkGitHubSkillUpdates('pet')).toMatchObject([{ id: 'pet', state: 'available' }]);
+  const updated = await updateGitHubSkill('pet', directory => fs.rename(directory, path.join(userData, 'previous-pet')));
+  expect(updated.status).toBe('updated');
+  expect(await fs.readFile(path.join(userData, 'skills/pet/references/guide.md'), 'utf8')).toBe('First guide');
+  expect(await checkGitHubSkillUpdates('pet')).toMatchObject([{ id: 'pet', state: 'current' }]);
+});
+
+it('marks a complete matching local package current immediately after linking', async () => {
+  const github = githubFixture(); vi.stubGlobal('fetch', github.request);
+  const source = path.join(userData, 'sources/review');
+  await fs.mkdir(source, { recursive: true });
+  await fs.writeFile(path.join(source, 'SKILL.md'), '---\nname: Review\ndescription: Read the change.\n---\nReview carefully.\n');
+  await importSkillPackage(source);
+  await linkGitHubSkill('review', 'https://github.com/acme/skills/tree/main/review');
+  expect(await checkGitHubSkillUpdates('review')).toMatchObject([{ id: 'review', state: 'current' }]);
+  await expect(linkGitHubSkill('review', 'https://github.com/acme/skills/tree/main/review')).rejects.toThrow('Only local skills');
+});
+
+it('refuses a source with a different SKILL.md and does not attach metadata after removal', async () => {
+  const github = githubFixture(); vi.stubGlobal('fetch', github.request);
+  const source = path.join(userData, 'sources/pet');
+  await fs.mkdir(source, { recursive: true });
+  await fs.writeFile(path.join(source, 'SKILL.md'), '---\nname: Other\ndescription: Different instructions.\n---\nDifferent instructions.\n');
+  await importSkillPackage(source);
+  await expect(linkGitHubSkill('pet', 'https://github.com/acme/skills/tree/main/pet')).rejects.toThrow('does not match');
+  expect((await listManagedSkills())[0]!.origin).toBeNull();
+  await fs.writeFile(path.join(userData, 'skills/pet/SKILL.md'), '---\nname: Test Pet\ndescription: Version one.\n---\nUse guide.\n');
+  const reached = github.pauseCommit();
+  const pending = linkGitHubSkill('pet', 'https://github.com/acme/skills/tree/main/pet');
+  await reached;
+  await removeSkill('pet', directory => fs.rename(directory, path.join(userData, 'removed-pet')));
+  github.resume();
+  await expect(pending).rejects.toThrow('removed or changed');
+  expect(await listManagedSkills()).toEqual([]);
 });
 
 it('does not publish a stale check after removal and fails closed on a truncated tree', async () => {

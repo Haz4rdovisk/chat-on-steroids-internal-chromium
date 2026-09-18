@@ -415,6 +415,12 @@ poller, GitHub credential, new root or execution authority is introduced. Remove
 managed package to the OS Trash after confirmation. Search is a catalog projection; project
 and external skills remain discoverable in the composer but are not presented as installed CoS packages.
 
+Local cards show a concise “Local” status. Their menu can link a public GitHub
+source only when its verified `SKILL.md` bytes match the installed file and its folder name
+maps to the same skill id. Linking does not replace local files: the sidecar records their
+actual package revision, so missing/different resources show as an available update instead
+of a false “Up to date.” Any later replacement still requires the user's confirmation.
+
 Skills open through leading `/` completion in the composer; the attachment popup's Skills button
 inserts that leading slash and focuses the input while preserving existing draft text. Commands and Skills are
 separate compact sections; the sidebar library does not add a second Skills selection ledger.

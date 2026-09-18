@@ -21,6 +21,7 @@ app.whenReady().then(async () => {
       listManagedSkills:()=>ok(skills),
       skillsImport:()=>ok(skills),
       skillsImportGithub:()=>ok(skills),
+      skillsLinkGithub:()=>ok(skills),
       skillsCheckGithub:()=>ok([
         {id:'review',originRevision:'b'.repeat(64),state:'available',checkedAt:Date.now()},
         {id:'design-check',originRevision:'d'.repeat(64),state:'current',checkedAt:Date.now()}
@@ -57,6 +58,10 @@ app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 25));
     assert.equal(await js('document.querySelectorAll(".skill-library-card").length'), 3);
     assert.equal(await js('document.querySelectorAll(".skill-library-source.is-available").length'), 1);
+    assert.equal(await js('document.querySelectorAll(".skill-library-source.is-local").length'), 1);
+    const entrance = await js(`(() => { const style = getComputedStyle(document.querySelector('[data-panel="skills"]'));
+      return { name: style.animationName, duration: style.animationDuration, timing: style.animationTimingFunction }; })()`);
+    assert.deepEqual(entrance, { name: 'surface-in', duration: '0.16s', timing: 'ease-out' });
     for (const [width, height, name] of [[1100, 800, 'desktop.png'], [850, 700, 'compact.png']]) {
       win.setSize(width, height);
       await new Promise(resolve => setTimeout(resolve, 150));
@@ -74,6 +79,10 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.querySelector('#skillGithubDialog').open`), true);
     await new Promise(resolve => setTimeout(resolve, 150));
     fs.writeFileSync(path.join(output, 'github-import.png'), (await win.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
+    await js(`document.querySelector('#skillGithubDialog').close(); document.querySelector('.skill-import-menu').open=false; document.querySelector('[data-skill-id="handoff"] .plugin-menu-actions button').click()`);
+    assert.equal(await js(`document.querySelector('#skillGithubTitle').textContent.includes('Link Clear Handoff')`), true);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    fs.writeFileSync(path.join(output, 'github-link.png'), (await win.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
     await js(`document.querySelector('#skillGithubDialog').close(); document.querySelector('.skill-import-menu').open=false; document.querySelector('.skill-library-card .plugin-menu').open=true; document.querySelector('.skill-library-card .plugin-menu-actions button').click()`);
     assert.equal(await js(`document.querySelector('#skillUpdateDialog').open`), true);
     await new Promise(resolve => setTimeout(resolve, 150));

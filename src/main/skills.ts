@@ -461,6 +461,94 @@ function originBytes(origin: GitHubSkillOrigin | undefined, revision: string): B
   return Buffer.from(JSON.stringify(origin), 'utf8');
 }
 
+export function skillPackageRevision(files: Array<{ relative: string; sha: string; size: number }>): string {
+  const ordered = [...files].sort((left, right) => left.relative < right.relative ? -1 : left.relative > right.relative ? 1 : 0)
+    .map(file => ({ relative: file.relative, sha: file.sha, size: file.size }));
+  return createHash('sha256').update(JSON.stringify(ordered)).digest('hex');
+}
+
+/** Link an existing local package without replacing its files or claiming missing resources are current. */
+export function linkSkillPackage(id: string, source: GitHubSkillOrigin): Promise<void> {
+  return serial(async () => {
+    assertSkillId(id);
+    if (!validGitHubSkillOrigin(source)) throw new Error('Invalid GitHub skill source');
+    const name = source.directory.split('/').filter(Boolean).at(-1) ?? new URL(source.url).pathname.split('/')[2]!;
+    if (slugSkillId(name) !== id) throw new Error('The GitHub folder name does not match this skill');
+    const candidateRoot = requiredRoot();
+    await assertManagedRoot(candidateRoot);
+    const record = await recordAt(candidateRoot, id);
+    if (!record) throw new Error('The local skill was removed or changed');
+    if (await originAt(candidateRoot, id)) throw new Error('This skill already has a GitHub source');
+    if (record.revision !== source.skillSha256) throw new Error('The local SKILL.md does not match this GitHub source');
+    const directory = path.join(candidateRoot, id);
+    const beforeDirectory = identityOf(await fs.lstat(directory));
+    const files: Array<{ relative: string; sha: string; size: number }> = [];
+    let folders = 0, entries = 0, bytes = 0;
+    const collect = async (folder: string, relative: string, depth: number): Promise<void> => {
+      if (++folders > 12 || depth > 10) throw new Error('The local skill has too many nested folders');
+      const before = identityOf(await fs.lstat(folder));
+      const directory = await fs.opendir(folder);
+      try { for await (const entry of directory) {
+        if (++entries > 52) throw new Error('The local skill exceeds GitHub update limits');
+        if (relative === '' && entry.name === SKILL_ORIGIN_FILENAME)
+          throw new Error('The local skill already contains origin metadata');
+        const nextRelative = [relative, entry.name].filter(Boolean).join('/');
+        const filename = path.join(folder, entry.name);
+        const stat = await fs.lstat(filename);
+        if (stat.isSymbolicLink()) throw new Error('The local skill contains a linked resource');
+        if (stat.isDirectory()) { await collect(filename, nextRelative, depth + 1); continue; }
+        if (!stat.isFile()) throw new Error('The local skill contains an unsupported resource');
+        if (files.length >= 40 || (bytes += stat.size) > 32 * 1024 * 1024)
+          throw new Error('The local skill exceeds GitHub update limits');
+        const handle = await fs.open(filename, 'r');
+        let content: Buffer;
+        try {
+          if (!sameIdentity(identityOf(stat), identityOf(await handle.stat())))
+            throw new Error('The local skill changed while linking');
+          content = Buffer.alloc(stat.size);
+          let offset = 0;
+          while (offset < content.length) {
+            const read = await handle.read(content, offset, content.length - offset, offset);
+            if (!read.bytesRead) throw new Error('The local skill changed while linking');
+            offset += read.bytesRead;
+          }
+          if (!sameIdentity(identityOf(stat), identityOf(await handle.stat())))
+            throw new Error('The local skill changed while linking');
+        } finally { await handle.close(); }
+        if (!sameIdentity(identityOf(stat), identityOf(await fs.lstat(filename))))
+          throw new Error('The local skill changed while linking');
+        files.push({ relative: nextRelative, size: content.length,
+          sha: createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex') });
+      } } finally { await directory.close().catch(() => undefined); }
+      if (!sameIdentity(before, identityOf(await fs.lstat(folder))))
+        throw new Error('The local skill changed while linking');
+    };
+    await collect(directory, '', 0);
+    const current = await recordAt(candidateRoot, id);
+    if (!current || current.revision !== record.revision || !sameIdentity(beforeDirectory, identityOf(await fs.lstat(directory))))
+      throw new Error('The local skill changed while linking');
+    await assertManagedRoot(candidateRoot);
+    const origin = { ...source, revision: skillPackageRevision(files) };
+    const filename = path.join(directory, SKILL_ORIGIN_FILENAME);
+    let owned: FileIdentity | null = null;
+    try {
+      const directoryReal = process.platform === 'win32' ? await rawRealpathNative(directory) : await fs.realpath(directory);
+      if (!sameIdentity(beforeDirectory, identityOf(await fs.lstat(directory))) || !sameNativePath(directoryReal, directory))
+        throw new Error('The local skill changed while linking');
+      const handle = await fs.open(filename, 'wx', 0o600);
+      try { await handle.writeFile(JSON.stringify(origin)); await handle.sync(); owned = identityOf(await handle.stat()); }
+      catch (error) { owned = identityOf(await handle.stat()); throw error; }
+      finally { await handle.close(); }
+      if ((await originAt(candidateRoot, id))?.revision !== origin.revision ||
+          (await recordAt(candidateRoot, id))?.revision !== record.revision)
+        throw new Error('The GitHub source could not be verified');
+    } catch (error) {
+      await removeOwnedFile(filename, owned);
+      throw error;
+    }
+  });
+}
+
 /** Publish a complete selected package using the same serialized managed-library owner. */
 export function importSkillPackage(sourcePath: string, origin?: GitHubSkillOrigin): Promise<SkillSummary> {
   return serial(async () => {

@@ -10,12 +10,19 @@ export function initSkillsLibrary(api: AppApi): () => void {
   let epoch = 0;
   const checks = new Map<string, GitHubSkillUpdateCheck>();
   const checking = new Set<string>();
+  let linkTarget: ManagedSkill | null = null;
   const checkAgeMs = 15 * 60_000;
   let checkPass: Promise<void> | null = null;
 
   const paintSource = (skill: ManagedSkill): void => {
     const source = document.querySelector<HTMLElement>(`[data-skill-id="${skill.id}"] .skill-library-source`);
-    if (!source || !skill.origin) return;
+    if (!source) return;
+    if (!skill.origin) {
+      source.className = 'skill-library-source is-local';
+      source.replaceChildren(icon('i-folder'), el('span', '', () => t('Local')));
+      ui(source, 'title', () => t('Link a GitHub source from the card menu to check for updates.'));
+      return;
+    }
     const check = checks.get(skill.id);
     const state = checking.has(skill.id) ? 'checking' : check?.state ?? 'unknown';
     source.className = `skill-library-source is-${state}`;
@@ -60,11 +67,9 @@ export function initSkillsLibrary(api: AppApi): () => void {
       title.append(el('h2', '', skill.name), el('p', 'muted', skill.description || t('Reusable instructions for this workspace.')));
       const foot = el('div', 'plugin-card-foot');
       foot.append(el('span', 'skill-library-id', `/${skill.id}`));
-      if (skill.origin) {
-        const source = el('span', 'skill-library-source');
-        source.setAttribute('aria-live', 'polite');
-        foot.append(source);
-      }
+      const source = el('span', 'skill-library-source');
+      source.setAttribute('aria-live', 'polite');
+      foot.append(source);
       title.append(foot);
       entry.append(artwork, title);
       const menu = document.createElement('details'); menu.className = 'plugin-menu';
@@ -75,6 +80,10 @@ export function initSkillsLibrary(api: AppApi): () => void {
         const refresh = el('button', 'btn', () => t('Update from GitHub')) as HTMLButtonElement;
         refresh.type = 'button'; refresh.addEventListener('click', () => { menu.open = false; confirmUpdate(skill); });
         actions.append(refresh);
+      } else {
+        const link = el('button', 'btn', () => t('Link GitHub source')) as HTMLButtonElement;
+        link.type = 'button'; link.addEventListener('click', () => { menu.open = false; openGithubDialog(skill); });
+        actions.append(link);
       }
       const remove = el('button', 'btn plugin-destructive', () => t('Remove skill')) as HTMLButtonElement;
       remove.type = 'button'; remove.addEventListener('click', () => confirmRemove(skill));
@@ -240,11 +249,18 @@ export function initSkillsLibrary(api: AppApi): () => void {
   const githubSubmit = $<HTMLButtonElement>('skillGithubSubmit');
   const githubClose = $<HTMLButtonElement>('skillGithubClose');
   const githubCancel = $<HTMLButtonElement>('skillGithubCancel');
-  $('skillsImportGithub').addEventListener('click', () => {
+  const openGithubDialog = (target: ManagedSkill | null): void => {
+    linkTarget = target;
+    ui($('skillGithubTitle'), 'textContent', () => t(target ? 'Link {0} to GitHub' : 'Import from GitHub', target ? [target.name] : []));
+    ui($('skillGithubDescription'), 'textContent', () => t(target
+      ? 'Link only if the local SKILL.md matches the GitHub file. Your files stay in place; missing or changed resources will show as an available update.'
+      : 'Paste a public GitHub folder link or a link to its SKILL.md. The complete skill folder will be copied to your CoS library.'));
+    ui(githubSubmit, 'textContent', () => t(target ? 'Link source' : 'Import skill'));
     $('skillsImportGithub').closest('details')?.removeAttribute('open');
     githubError.hidden = true; githubError.textContent = '';
     githubDialog.showModal(); githubInput.focus();
-  });
+  };
+  $('skillsImportGithub').addEventListener('click', () => openGithubDialog(null));
   githubClose.addEventListener('click', () => githubDialog.close());
   githubCancel.addEventListener('click', () => githubDialog.close());
   githubDialog.addEventListener('click', event => { if (event.target === githubDialog && !githubSubmit.disabled) githubDialog.close(); });
@@ -253,12 +269,15 @@ export function initSkillsLibrary(api: AppApi): () => void {
     event.preventDefault();
     githubSubmit.disabled = githubClose.disabled = githubCancel.disabled = true;
     githubDialog.setAttribute('aria-busy', 'true');
-    ui(githubSubmit, 'textContent', () => t('Importing…'));
+    const target = linkTarget;
+    ui(githubSubmit, 'textContent', () => t(target ? 'Linking…' : 'Importing…'));
     githubError.hidden = true;
     const own = ++epoch;
     const previous = new Set(skills.map(skill => skill.id));
     try {
-      const result = await api.skillsImportGithub(githubInput.value.trim());
+      const result = target
+        ? await api.skillsLinkGithub(target.id, githubInput.value.trim())
+        : await api.skillsImportGithub(githubInput.value.trim());
       if (!result.ok) { githubError.textContent = result.error; githubError.hidden = false; return; }
       if (own === epoch) {
         setSkills(result.data);
@@ -269,15 +288,19 @@ export function initSkillsLibrary(api: AppApi): () => void {
           }
         }
       }
-      else void update(api.listManagedSkills());
+      else await update(api.listManagedSkills());
       githubDialog.close(); githubInput.value = '';
-      toast(t('Skill imported from GitHub'));
+      toast(t(target ? 'GitHub source linked' : 'Skill imported from GitHub'));
+      if (target) {
+        if (checkPass) await checkPass;
+        await checkUpdates(true);
+      }
     } catch {
       githubError.textContent = t('Could not reach GitHub. Try again.'); githubError.hidden = false;
     } finally {
       githubSubmit.disabled = githubClose.disabled = githubCancel.disabled = false;
       githubDialog.removeAttribute('aria-busy');
-      ui(githubSubmit, 'textContent', () => t('Import skill'));
+      ui(githubSubmit, 'textContent', () => t(linkTarget ? 'Link source' : 'Import skill'));
     }
   })());
   void update(api.listManagedSkills());

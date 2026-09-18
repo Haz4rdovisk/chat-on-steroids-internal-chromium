@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { rawPromises as fs } from './rawfs.js';
-import { importSkillPackage, listManagedSkills, updateSkillPackage } from './skills.js';
+import { importSkillPackage, linkSkillPackage, listManagedSkills, skillPackageRevision, updateSkillPackage } from './skills.js';
 import {
   githubSkillUrl,
   parseGitHubSkillUrl,
@@ -65,11 +65,6 @@ function repositoryEndpoint(location: GitHubSkillLocation): string {
   return `/repos/${encodeURIComponent(location.owner)}/${encodeURIComponent(location.repository)}`;
 }
 
-function revisionFor(files: File[]): string {
-  files.sort((left, right) => left.relative < right.relative ? -1 : left.relative > right.relative ? 1 : 0);
-  return createHash('sha256').update(JSON.stringify(files)).digest('hex');
-}
-
 async function inspectGitHubSkill(requested: GitHubSkillLocation, signal: AbortSignal): Promise<Snapshot> {
   const base = repositoryEndpoint(requested);
   let ref = requested.ref;
@@ -109,7 +104,7 @@ async function inspectGitHubSkill(requested: GitHubSkillLocation, signal: AbortS
   }
   if (!files.some(file => file.relative === 'SKILL.md')) throw new Error('GitHub skill folder needs SKILL.md');
   if (files.some(file => file.relative === '.cos-github.json')) throw new Error('GitHub skill uses a reserved CoS metadata filename');
-  const revision = revisionFor(files);
+  const revision = skillPackageRevision(files);
   return { location, commit, revision, files };
 }
 
@@ -139,7 +134,7 @@ function revisionFromTree(entries: TreeEntry[], directory: string): string {
   }
   if (!files.some(file => file.relative === 'SKILL.md')) throw new Error('GitHub skill folder needs SKILL.md');
   if (files.some(file => file.relative === '.cos-github.json')) throw new Error('GitHub skill uses a reserved CoS metadata filename');
-  return revisionFor(files);
+  return skillPackageRevision(files);
 }
 
 /** A page visit checks sources, never installs them; each repository/ref is requested once. */
@@ -234,6 +229,22 @@ export async function importGitHubSkill(url: string): Promise<ManagedSkill[]> {
   const stage = await stageSkill(snapshot, signal);
   try { await importSkillPackage(stage.folder, stage.origin); }
   finally { await stage.cleanup(); }
+  return listManagedSkills();
+}
+
+export async function linkGitHubSkill(id: string, url: string): Promise<ManagedSkill[]> {
+  const installed = (await listManagedSkills()).find(skill => skill.id === id);
+  if (!installed || installed.origin) throw new Error('Only local skills can be linked to GitHub');
+  const signal = AbortSignal.timeout(120_000);
+  const snapshot = await inspectGitHubSkill(parseGitHubSkillUrl(url), signal);
+  const skillFile = snapshot.files.find(file => file.relative === 'SKILL.md')!;
+  const remoteSkill = await downloadBlob(repositoryEndpoint(snapshot.location), skillFile, signal);
+  const origin: GitHubSkillOrigin = {
+    kind: 'github', url: githubSkillUrl(snapshot.location), ref: snapshot.location.ref,
+    directory: snapshot.location.directory, commit: snapshot.commit, revision: snapshot.revision,
+    skillSha256: createHash('sha256').update(remoteSkill).digest('hex')
+  };
+  await linkSkillPackage(id, origin);
   return listManagedSkills();
 }
 

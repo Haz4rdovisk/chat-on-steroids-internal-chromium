@@ -9,7 +9,7 @@ it('shows the managed library, imports both source shapes, filters and removes o
   dom = new JSDOM(`<!doctype html><body>
     <input id="skillsSearch"><button id="skillsRefresh"></button>
     <details class="plugin-menu"><summary>Import</summary><div class="plugin-menu-actions"><button id="skillsImportFolder"></button><button id="skillsImportFile"></button><button id="skillsImportGithub"></button></div></details>
-    <dialog id="skillGithubDialog"><button id="skillGithubClose"></button><form id="skillGithubForm"><input id="skillGithubUrl"><p id="skillGithubError" hidden></p><button id="skillGithubCancel"></button><button id="skillGithubSubmit"></button></form></dialog>
+    <dialog id="skillGithubDialog"><h2 id="skillGithubTitle"></h2><p id="skillGithubDescription"></p><button id="skillGithubClose"></button><form id="skillGithubForm"><input id="skillGithubUrl"><p id="skillGithubError" hidden></p><button id="skillGithubCancel"></button><button id="skillGithubSubmit"></button></form></dialog>
     <span id="skillsCount"></span><div id="skillsInstalled"></div>
   </body>`, { url: 'https://skills.test/' });
   const w = dom.window;
@@ -44,6 +44,8 @@ it('shows the managed library, imports both source shapes, filters and removes o
   (w.document.getElementById('skillsImportFolder') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(w.document.querySelectorAll('.skill-library-card')).toHaveLength(1));
   expect(w.document.querySelector('[data-skill-id="folder"]')!.textContent).toContain('/folder');
+  expect(w.document.querySelector('[data-skill-id="folder"] .skill-library-source')!.textContent).toContain('Local');
+  expect(w.document.querySelector('[data-skill-id="folder"] .plugin-menu-actions')!.textContent).toContain('Link GitHub source');
   (w.document.getElementById('skillsImportFile') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(w.document.querySelectorAll('.skill-library-card')).toHaveLength(2));
   expect(skillsImport.mock.calls.map(call => call[0])).toEqual(['folder', 'file']);
@@ -99,11 +101,46 @@ it('shows the managed library, imports both source shapes, filters and removes o
   await vi.waitFor(() => expect(w.document.querySelector('[data-skill-id="review"] .skill-library-source')!.textContent).toContain('Update available'));
 });
 
+it('links a matching local skill from its card without replacing it or hiding GitHub check errors', async () => {
+  dom = new JSDOM(`<!doctype html><body>
+    <input id="skillsSearch"><button id="skillsRefresh"></button>
+    <details class="plugin-menu"><summary>Import</summary><div><button id="skillsImportFolder"></button><button id="skillsImportFile"></button><button id="skillsImportGithub"></button></div></details>
+    <dialog id="skillGithubDialog"><h2 id="skillGithubTitle"></h2><p id="skillGithubDescription"></p><button id="skillGithubClose"></button><form id="skillGithubForm"><input id="skillGithubUrl"><p id="skillGithubError" hidden></p><button id="skillGithubCancel"></button><button id="skillGithubSubmit"></button></form></dialog>
+    <span id="skillsCount"></span><div id="skillsInstalled"></div>
+  </body>`, { url: 'https://skills.test/' });
+  const w = dom.window;
+  for (const [key, value] of Object.entries({ window: w, document: w.document, HTMLElement: w.HTMLElement, HTMLButtonElement: w.HTMLButtonElement, HTMLDialogElement: w.HTMLDialogElement })) vi.stubGlobal(key, value);
+  w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  w.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new w.Event('close')); };
+  const local: ManagedSkill = { id: 'review', name: 'Review', description: 'Local instructions.', path: '/skills/review/SKILL.md', origin: null };
+  const origin = { kind: 'github' as const, url: 'https://github.com/acme/skills/tree/main/review', ref: 'main', directory: 'review', commit: 'a'.repeat(40), revision: 'b'.repeat(64), skillSha256: 'c'.repeat(64) };
+  const listManagedSkills = vi.fn(async () => ({ ok: true as const, data: [local] }));
+  const skillsLinkGithub = vi.fn().mockResolvedValueOnce({ ok: false, error: 'The local SKILL.md does not match this GitHub source' })
+    .mockResolvedValueOnce({ ok: true, data: [{ ...local, origin }] });
+  const skillsCheckGithub = vi.fn(async () => ({ ok: true as const, data: [
+    { id: 'review', originRevision: origin.revision, state: 'available' as const, checkedAt: Date.now() }
+  ] }));
+  const { initSkillsLibrary } = await import('../src/renderer/skills-library.js');
+  initSkillsLibrary({ listManagedSkills, skillsLinkGithub, skillsCheckGithub } as any);
+  await vi.waitFor(() => expect(w.document.querySelector('.skill-library-card')).not.toBeNull());
+  (w.document.querySelector('[data-skill-id="review"] .plugin-menu-actions .btn') as HTMLButtonElement).click();
+  expect(w.document.getElementById('skillGithubTitle')!.textContent).toContain('Link Review');
+  expect(w.document.getElementById('skillGithubDescription')!.textContent).toContain('Your files stay in place');
+  (w.document.getElementById('skillGithubUrl') as HTMLInputElement).value = origin.url;
+  w.document.getElementById('skillGithubForm')!.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await vi.waitFor(() => expect(w.document.getElementById('skillGithubError')!.textContent).toContain('does not match'));
+  expect(w.document.querySelector('[data-skill-id="review"] .skill-library-source')!.textContent).toContain('Local');
+  w.document.getElementById('skillGithubForm')!.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await vi.waitFor(() => expect(skillsLinkGithub).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(w.document.querySelector('[data-skill-id="review"] .skill-library-source')!.textContent).toContain('Update available'));
+  expect(skillsCheckGithub).toHaveBeenCalledWith('review');
+});
+
 it('automatically checks an installed GitHub skill on page open without installing it', async () => {
   dom = new JSDOM(`<!doctype html><body>
     <input id="skillsSearch"><button id="skillsRefresh"></button>
     <details class="plugin-menu"><summary>Import</summary><div><button id="skillsImportFolder"></button><button id="skillsImportFile"></button><button id="skillsImportGithub"></button></div></details>
-    <dialog id="skillGithubDialog"><button id="skillGithubClose"></button><form id="skillGithubForm"><input id="skillGithubUrl"><p id="skillGithubError" hidden></p><button id="skillGithubCancel"></button><button id="skillGithubSubmit"></button></form></dialog>
+    <dialog id="skillGithubDialog"><h2 id="skillGithubTitle"></h2><p id="skillGithubDescription"></p><button id="skillGithubClose"></button><form id="skillGithubForm"><input id="skillGithubUrl"><p id="skillGithubError" hidden></p><button id="skillGithubCancel"></button><button id="skillGithubSubmit"></button></form></dialog>
     <span id="skillsCount"></span><div id="skillsInstalled"></div>
   </body>`, { url: 'https://skills.test/' });
   const w = dom.window;
