@@ -52,7 +52,8 @@ let trayAnchorId: string | null = null;
 let menuTargetId: string | null = null;
 let disposed = false;
 let raf = 0;
-let lastFrameAt = 0;
+let timer = 0;
+let lastUpdateAt: number | null = null;
 const views = new Map<string, PetView>();
 const loading = new Map<string, symbol>();
 
@@ -189,22 +190,60 @@ function paintView(view: PetView): void {
   if (trayOpen && trayAnchorId === view.record.id) placeTray();
 }
 
-function ensureLoop(): void {
-  if (!raf && !disposed && views.size > 0 && snapshot?.visible !== false) raf = requestAnimationFrame(step);
+function cancelWake(): void {
+  if (timer) window.clearTimeout(timer);
+  if (raf) cancelAnimationFrame(raf);
+  timer = 0;
+  raf = 0;
 }
 
-function step(now: number): void {
-  raf = 0;
-  if (disposed || document.hidden || snapshot?.visible === false) { lastFrameAt = 0; return; }
-  const delta = lastFrameAt ? now - lastFrameAt : 0;
-  lastFrameAt = now;
+function canAnimate(): boolean {
+  return !disposed && !document.hidden && views.size > 0 && snapshot?.visible !== false;
+}
+
+function advance(now: number): void {
+  const delta = lastUpdateAt === null ? 0 : Math.max(0, now - lastUpdateAt);
+  lastUpdateAt = now;
   for (const view of views.values()) {
     const before = view.machine.state;
     view.machine.tick(delta);
     paintView(view);
     if (view.machine.state === 'idle' && before !== 'idle') persistPosition(view);
   }
-  raf = requestAnimationFrame(step);
+}
+
+function step(now: number): void {
+  raf = 0;
+  if (!canAnimate()) { lastUpdateAt = null; return; }
+  advance(now);
+  scheduleWake();
+}
+
+function scheduleWake(): void {
+  cancelWake();
+  if (!canAnimate()) { lastUpdateAt = null; return; }
+  lastUpdateAt ??= performance.now();
+  let delay = Infinity;
+  for (const view of views.values()) delay = Math.min(delay, view.machine.nextUpdateIn);
+  if (!Number.isFinite(delay)) return;
+  // The overlay owns one wake for every pet. Static authored frames and autonomous
+  // decisions use a timer; only actual travel/prop interpolation runs per display frame.
+  if (delay > 0) {
+    timer = window.setTimeout(() => {
+      timer = 0;
+      if (canAnimate()) raf = requestAnimationFrame(step);
+      else lastUpdateAt = null;
+    }, delay);
+  } else {
+    raf = requestAnimationFrame(step);
+  }
+}
+
+function reschedule(mutator?: () => void): void {
+  if (canAnimate()) advance(performance.now());
+  mutator?.();
+  for (const view of views.values()) paintView(view);
+  scheduleWake();
 }
 
 function disposeView(view: PetView): void {
@@ -244,19 +283,26 @@ function createView(record: PetRecord, atlasUrl: string, manifest: PetAnimationM
   shell.addEventListener('pointerdown', event => {
     if (event.button !== 0 || (event.target as HTMLElement).closest('.pet-badge')) return;
     closeMenu();
-    if (!machine.beginPointer(event.pointerId, { x: event.clientX, y: event.clientY })) return;
+    if (canAnimate()) advance(performance.now());
+    if (!machine.beginPointer(event.pointerId, { x: event.clientX, y: event.clientY })) {
+      scheduleWake();
+      return;
+    }
     shell.setPointerCapture(event.pointerId);
     shell.dataset.dragging = 'true';
     setInteractive(true);
-    ensureLoop();
+    scheduleWake();
   });
   shell.addEventListener('pointermove', event => {
     if (machine.pointer?.id !== event.pointerId) return;
+    if (canAnimate()) advance(performance.now());
     machine.movePointer(event.pointerId, { x: event.clientX, y: event.clientY });
     paintView(view);
+    scheduleWake();
   });
   shell.addEventListener('pointerup', event => {
     if (machine.pointer?.id !== event.pointerId) return;
+    if (canAnimate()) advance(performance.now());
     const clicked = !machine.pointer.dragging;
     machine.endPointer(event.pointerId);
     shell.dataset.dragging = 'false';
@@ -264,14 +310,18 @@ function createView(record: PetRecord, atlasUrl: string, manifest: PetAnimationM
     persistPosition(view);
     paintView(view);
     updateInteraction(pointer);
-    ensureLoop();
+    scheduleWake();
     if (clicked) api.focusOwner();
   });
   shell.addEventListener('pointercancel', event => {
+    if (machine.pointer?.id !== event.pointerId) return;
+    if (canAnimate()) advance(performance.now());
     machine.endPointer(event.pointerId, true);
     shell.dataset.dragging = 'false';
     persistPosition(view);
+    paintView(view);
     updateInteraction(pointer);
+    scheduleWake();
   });
   shell.addEventListener('contextmenu', event => {
     event.preventDefault();
@@ -283,7 +333,6 @@ function createView(record: PetRecord, atlasUrl: string, manifest: PetAnimationM
     setTray(!(trayOpen && trayAnchorId === record.id));
   });
   paintView(view);
-  ensureLoop();
   return view;
 }
 
@@ -300,7 +349,7 @@ function menuButton(label: string, run: (view: PetView) => void): HTMLButtonElem
   button.addEventListener('click', () => {
     const view = menuTargetId ? views.get(menuTargetId) : null;
     closeMenu();
-    if (view) { run(view); paintView(view); ensureLoop(); }
+    if (view) reschedule(() => run(view));
   });
   return button;
 }
@@ -430,19 +479,22 @@ function syncLibrary(): void {
       views.set(id, createView(current, reply.data.atlasDataUrl, reply.data.manifest, item.index));
       renderBadges();
       updateInteraction(pointer);
+      scheduleWake();
     });
   }
   renderBadges();
   updateInteraction(pointer);
-  ensureLoop();
+  scheduleWake();
 }
 
 function applyLibrary(next: PetLibraryState): void {
+  if (canAnimate()) advance(performance.now());
   library = next;
   syncLibrary();
 }
 
 function applySnapshot(next: PetOverlaySnapshot): void {
+  if (canAnimate()) advance(performance.now());
   const previous = snapshot?.level;
   snapshot = next;
   applyAppearance(next.theme, next.appearance);
@@ -456,15 +508,17 @@ function applySnapshot(next: PetOverlaySnapshot): void {
   }
   renderCards();
   renderBadges();
-  ensureLoop();
+  scheduleWake();
 }
 
 api.onLibraryChanged(applyLibrary);
 api.onSnapshot(applySnapshot);
 api.onPointer(updateInteraction);
 api.onBounds(next => {
-  bounds = next;
-  for (const view of views.values()) { view.machine.resize(bounds.width, bounds.height); paintView(view); }
+  reschedule(() => {
+    bounds = next;
+    for (const view of views.values()) view.machine.resize(bounds.width, bounds.height);
+  });
   placeTray();
 });
 
@@ -479,18 +533,21 @@ document.addEventListener('keydown', event => {
   }
 });
 motion.addEventListener('change', () => {
-  for (const view of views.values()) view.machine.setReducedMotion(motion.matches);
-  ensureLoop();
+  reschedule(() => {
+    for (const view of views.values()) view.machine.setReducedMotion(motion.matches);
+  });
 });
-document.addEventListener('visibilitychange', () => { lastFrameAt = 0; ensureLoop(); });
+document.addEventListener('visibilitychange', () => {
+  lastUpdateAt = null;
+  scheduleWake();
+});
 
 void api.listPets().then(reply => { if (reply.ok && !disposed) applyLibrary(reply.data); });
 
 window.addEventListener('pagehide', () => {
   disposed = true;
   loading.clear();
-  if (raf) cancelAnimationFrame(raf);
-  raf = 0;
+  cancelWake();
   for (const view of views.values()) disposeView(view);
   views.clear();
   menu.remove();

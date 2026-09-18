@@ -30,9 +30,9 @@ export function animationFrame(name: PetAnimation, elapsed: number, reduced=fals
   for(let i=0;i<clip.frames.length;i++) { time -= clip.ms[i]!; if(time<0) return clip.frames[i]!; }
   return clip.frames.at(-1)!;
 }
-function nextFrameIn(name: PetAnimation, elapsed: number): number {
-  const clip=manifest.animations[name];
-  let time=clip.loop?elapsed%animationDuration(name):elapsed;
+function nextFrameIn(name: PetAnimation, elapsed: number, authored: PetAnimationManifest): number {
+  const clip=authored.animations[name];
+  let time=clip.loop?elapsed%animationDuration(name,authored):elapsed;
   for(let i=0;i<clip.frames.length;i++){
     if(!clip.loop && i===clip.frames.length-1)return Infinity;
     if(time<clip.ms[i]!)return clip.ms[i]!-time;
@@ -75,10 +75,10 @@ export class PetMachine {
   get nextUpdateIn(): number {
     if(this.state==='hidden' || this.pointer && !this.pointer.dragging)return Infinity;
     if(this.state==='walk' || this.scene && ['grab','carry','throw'].includes(this.state))return 0;
-    const frame=this.reducedMotion?Infinity:nextFrameIn(this.state,this.elapsed);
+    const frame=this.reducedMotion?Infinity:nextFrameIn(this.state,this.elapsed,this.manifest);
     if(this.scene)return Math.max(0,Math.min(frame,this.phases[this.scene.phase]!.duration-this.elapsed));
     if(this.state==='held')return frame;
-    if(this.state!=='idle')return Math.max(0,Math.min(frame,animationDuration(this.state)-this.elapsed));
+    if(this.state!=='idle')return Math.max(0,Math.min(frame,animationDuration(this.state,this.manifest)-this.elapsed));
     return this.reducedMotion?Infinity:Math.max(0,Math.min(frame,this.nextDecision-this.clock,this.nextSpecial-this.clock));
   }
   private enter(state: PetAnimation): void { this.state=state; this.elapsed=0; }

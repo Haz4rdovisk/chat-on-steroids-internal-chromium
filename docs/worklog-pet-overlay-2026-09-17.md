@@ -161,3 +161,20 @@ path, not those later evidence levels.
   code. A clean Vite/Electron dev launch reached port 5173; the grid was
   visually checked, but the redesigned delete dialog was not captured in a
   reliable live screenshot. No package or installed-payload claim is made.
+
+## 2026-09-18 — mainstream port and scheduler integration
+
+- Ported the overlay/library onto the current mainstream baseline without the
+  Internal Chromium dock or its renderer/menu APIs. External browser and companion
+  setup remain the mainstream authority.
+- Replaced the overlay's permanent RAF with one earliest-deadline scheduler shared
+  by all enabled pets. Timers own authored frames and autonomous decisions; RAF is
+  reserved for continuous movement and prop interpolation. Visibility, reduced
+  motion, pointer mutations, library changes, and disposal reschedule or cancel the
+  same wake owner.
+- Corrected imported-pet deadlines to use that pet's own `animations.json` for both
+  frame and animation-duration calculations.
+- Focused typecheck and six Pets suites passed (34/34). The isolated Electron
+  performance check passed: idle measured 2.25 RAF/s, reduced motion and hidden
+  measured 0 RAF/s, and no renderer console errors were reported. This is source
+  and isolated-renderer evidence, not package or installed-payload evidence.

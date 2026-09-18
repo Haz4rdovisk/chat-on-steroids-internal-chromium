@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {PetMachine,clampPosition,readPreference,animationFrame,animationDuration,SPECIAL_COOLDOWN} from '../src/renderer/pet-machine.js';
+import type {PetAnimationManifest} from '../src/shared/pets.js';
 import manifest from '../src/renderer/pet-assets/animations.json';
 const create=()=>new PetMachine({visible:true,x:180,y:300},1000,800,()=>.5);
 const advance=(pet:PetMachine,ms:number)=>{while(ms>0){const dt=Math.min(ms,100);pet.tick(dt);ms-=dt;}};
@@ -22,6 +23,14 @@ describe('Tur Tur Sahur animation owner',()=>{
     pet.setReducedMotion(true);expect(pet.nextUpdateIn).toBe(Infinity);
     pet.poke();expect(pet.nextUpdateIn).toBe(animationDuration('poke'));
     pet.tick(pet.nextUpdateIn);expect(pet.state).toBe('idle');expect(pet.nextUpdateIn).toBe(Infinity);
+  });
+  it('uses each imported manifest as the scheduling authority',()=>{
+    const custom=structuredClone(manifest) as unknown as PetAnimationManifest;
+    custom.animations.spawn.ms[0]=937;
+    const pet=new PetMachine({visible:true,x:180,y:300},1000,800,()=>.5,custom);
+    expect(pet.nextUpdateIn).toBe(937);
+    pet.tick(937);
+    expect(pet.frame).toBe(1);
   });
   it.each(['openai','anthropic'] as const)('deadline-driven %s retains every authored non-looping action frame',kind=>{
     const pet=create();pet.startAction(kind);

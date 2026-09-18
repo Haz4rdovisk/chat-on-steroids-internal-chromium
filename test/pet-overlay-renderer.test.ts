@@ -4,6 +4,9 @@ import type { PetLibraryState, PetOverlayBounds, PetOverlayPointer, PetOverlaySn
 import authoredManifest from '../src/renderer/pet-assets/animations.json';
 
 let dom: JSDOM;
+let rafCallbacks: Map<number, FrameRequestCallback>;
+let timerCallbacks: Map<number, { callback: () => void; delay: number }>;
+let nextWakeId: number;
 const ok = <T>(data: T) => Promise.resolve({ ok: true as const, data });
 
 const overlayBody = `
@@ -16,8 +19,17 @@ const overlayBody = `
 beforeEach(() => {
   dom = new JSDOM(`<body>${overlayBody}</body>`, { url: 'https://pet-overlay.test', pretendToBeVisual: true });
   const w = dom.window, capture = new Set<number>();
+  rafCallbacks = new Map();
+  timerCallbacks = new Map();
+  nextWakeId = 1;
   const media = { matches: false, addEventListener: vi.fn() };
   Object.defineProperty(w, 'matchMedia', { configurable: true, value: () => media });
+  w.setTimeout = ((callback: TimerHandler, delay?: number) => {
+    const id = nextWakeId++;
+    timerCallbacks.set(id, { callback: callback as () => void, delay: Number(delay ?? 0) });
+    return id;
+  }) as typeof w.setTimeout;
+  w.clearTimeout = ((id?: number) => { if (id) timerCallbacks.delete(id); }) as typeof w.clearTimeout;
   w.HTMLElement.prototype.setPointerCapture = id => { capture.add(id); };
   w.HTMLElement.prototype.hasPointerCapture = id => capture.has(id);
   w.HTMLElement.prototype.releasePointerCapture = id => { capture.delete(id); };
@@ -25,7 +37,12 @@ beforeEach(() => {
     window: w, document: w.document, localStorage: w.localStorage, innerWidth: 1000, innerHeight: 800,
     devicePixelRatio: 1, AbortController: w.AbortController,
     matchMedia: () => media,
-    requestAnimationFrame: vi.fn(() => 1), cancelAnimationFrame: vi.fn()
+    requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
+      const id = nextWakeId++;
+      rafCallbacks.set(id, callback);
+      return id;
+    }),
+    cancelAnimationFrame: vi.fn((id: number) => { rafCallbacks.delete(id); })
   })) vi.stubGlobal(key, value);
 });
 
@@ -40,6 +57,10 @@ function pointer(target: HTMLElement, type: string, x: number, y: number, id = 1
   const event = new dom.window.MouseEvent(type, { button: 0, clientX: x, clientY: y, bubbles: true });
   Object.defineProperty(event, 'pointerId', { value: id });
   target.dispatchEvent(event);
+}
+
+async function flushOverlay(): Promise<void> {
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
 }
 
 it('uses one spritesheet body per pet while preserving specials, multi-pet tasks, drag, and click-through', async () => {
@@ -63,7 +84,7 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
   };
   Object.defineProperty(dom.window, 'petApi', { configurable: true, value: petApi });
   await import('../src/renderer/pet-overlay.js');
-  await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  await flushOverlay();
   boundsListener!({ width: 1000, height: 800, scaleFactor: 1 });
   snapshotListener!({
     visible: true, level: 'running',
@@ -126,4 +147,48 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
 
   libraryListener!({ pets: library.pets.map(pet => pet.id === 'willow' ? { ...pet, enabled: false } : pet) });
   expect(dom.window.document.querySelectorAll('.pet-shell')).toHaveLength(1);
+});
+
+it('sleeps between authored deadlines and uses display frames only for continuous motion', async () => {
+  const library: PetLibraryState = { pets: [
+    { id: 'tur-tur-sahur', displayName: 'Tur Tur Sahur', description: '', kind: 'builtin', builtin: true, enabled: true, favorite: true }
+  ] };
+  const petApi = {
+    listPets: () => ok(library),
+    petAsset: () => Promise.resolve({ ok: false as const, error: 'not used' }),
+    setInteractive: vi.fn(), focusOwner: vi.fn(), openLibrary: vi.fn(), openActivity: vi.fn(),
+    onSnapshot: () => vi.fn(), onLibraryChanged: () => vi.fn(), onPointer: () => vi.fn(), onBounds: () => vi.fn()
+  };
+  Object.defineProperty(dom.window, 'petApi', { configurable: true, value: petApi });
+  await import('../src/renderer/pet-overlay.js');
+  await flushOverlay();
+
+  expect(dom.window.document.querySelectorAll('.pet-shell')).toHaveLength(1);
+  expect(rafCallbacks.size).toBe(0);
+  expect(timerCallbacks.size).toBe(1);
+  const [timerId, pending] = [...timerCallbacks.entries()][0]!;
+  expect(pending.delay).toBeGreaterThan(0);
+  timerCallbacks.delete(timerId);
+  pending.callback();
+  expect(rafCallbacks.size).toBe(1);
+
+  const [frameId, frame] = [...rafCallbacks.entries()][0]!;
+  rafCallbacks.delete(frameId);
+  frame(performance.now() + pending.delay);
+  expect(rafCallbacks.size).toBe(0);
+  expect(timerCallbacks.size).toBe(1);
+
+  const shell = dom.window.document.querySelector<HTMLElement>('.pet-shell')!;
+  shell.dispatchEvent(new dom.window.MouseEvent('contextmenu', { clientX: 220, clientY: 180, bubbles: true }));
+  (dom.window.document.querySelector('.pet-menu button') as HTMLButtonElement).click();
+  expect(timerCallbacks.size).toBe(0);
+  expect(rafCallbacks.size).toBe(1);
+
+  const [movingId, movingFrame] = [...rafCallbacks.entries()][0]!;
+  rafCallbacks.delete(movingId);
+  movingFrame(performance.now() + pending.delay + 16);
+  expect(rafCallbacks.size).toBe(1);
+  dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+  expect(rafCallbacks.size).toBe(0);
+  expect(timerCallbacks.size).toBe(0);
 });
