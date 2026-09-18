@@ -16,6 +16,11 @@ const petIpcMocks = vi.hoisted(() => ({
   setEnabled: vi.fn((id: string, enabled: boolean) => ({ pets: [{ id, enabled }] })),
   setOverlayVisible: vi.fn(async () => ({ visible: true, ready: true, activeCount: 1, activityCount: 0 }))
 }));
+const githubSkillIpcMocks = vi.hoisted(() => ({
+  import: vi.fn(async (_url: string) => [{ id: 'review', name: 'Review', description: '', path: '/skills/review/SKILL.md', origin: null }]),
+  check: vi.fn(async (_id: string) => [{ id: 'review', originRevision: 'b'.repeat(64), state: 'available' as const, checkedAt: 1 }]),
+  update: vi.fn(async (_id: string, _trash: (directory: string) => Promise<void>) => ({ status: 'current' as const, skills: [] }))
+}));
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -25,7 +30,7 @@ vi.mock('electron', () => ({
   BrowserWindow: class {},
   clipboard: { readText: () => '', writeText: () => undefined },
   dialog: { showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] as string[] })) },
-  shell: { openExternal: vi.fn(async () => undefined), openPath: vi.fn(async () => '') },
+  shell: { openExternal: vi.fn(async () => undefined), openPath: vi.fn(async () => ''), trashItem: vi.fn(async () => undefined) },
   nativeTheme: { themeSource: 'system' },
   safeStorage: {
     isAsyncEncryptionAvailable: vi.fn(async () => true),
@@ -52,6 +57,11 @@ vi.mock('../src/main/pet-overlay.js', () => ({
   refreshPetOverlayActivities: vi.fn(),
   refreshPetOverlayAppearance: vi.fn(),
   setPetOverlayVisible: petIpcMocks.setOverlayVisible
+}));
+vi.mock('../src/main/skill-github.js', () => ({
+  importGitHubSkill: githubSkillIpcMocks.import,
+  checkGitHubSkillUpdates: githubSkillIpcMocks.check,
+  updateGitHubSkill: githubSkillIpcMocks.update
 }));
 
 const { defaultConfig, getConfig, initConfigPath, saveConfig } = await import('../src/main/config.js');
@@ -81,6 +91,7 @@ const {
   swarmStateForCaller
 } = await import('../src/main/agents.js');
 const { registerIpc } = await import('../src/main/ipc.js');
+const { initSkillsPath, listSkills } = await import('../src/main/skills.js');
 const { openInPreferredBrowser } = await import('../src/main/browser.js');
 const { app, nativeTheme, safeStorage, shell, dialog } = await import('electron');
 const { extensionDownloadUrl } = await import('../src/main/version.js');
@@ -369,6 +380,7 @@ beforeAll(async () => {
   initSecretsPath(dir);
   initSessionStore(dir);
   initDurableStore(dir);
+  await initSkillsPath(dir);
   onSwarmPersist(() => writeDurableSoon('ipc-swarm', snapshotSwarm()));
   onSwarmPersistNow((snapshot) => writeDurableNow('ipc-swarm', snapshot));
   onRetiredWorkersPersist(() => writeDurableSoon('ipc-retired-workers', snapshotRetiredWorkers()));
@@ -402,6 +414,9 @@ beforeEach(async () => {
   vi.mocked(app.getVersion).mockReset().mockReturnValue('0.0.0');
   petIpcMocks.setEnabled.mockClear();
   petIpcMocks.setOverlayVisible.mockClear();
+  githubSkillIpcMocks.import.mockClear();
+  githubSkillIpcMocks.check.mockClear();
+  githubSkillIpcMocks.update.mockClear();
   resetSwarm();
   resetBridgeForTests();
   resetWorkspaces();
@@ -427,6 +442,50 @@ it('does not force global visibility when a pet is disabled', async () => {
   expect(result.ok).toBe(true);
   expect(petIpcMocks.setEnabled).toHaveBeenCalledWith('tur-tur-sahur', false);
   expect(petIpcMocks.setOverlayVisible).not.toHaveBeenCalled();
+});
+
+it('imports Skills through OS pickers into the canonical library and trashes only valid IDs', async () => {
+  const source = path.join(dir, 'ipc-skill-source');
+  const folder = path.join(source, 'ipc-package');
+  await fs.mkdir(path.join(folder, 'references'), { recursive: true });
+  await fs.writeFile(path.join(folder, 'SKILL.md'), '---\nname: IPC Package\ndescription: A package.\n---\nUse references.\n');
+  await fs.writeFile(path.join(folder, 'references', 'guide.md'), 'Guide');
+  const file = path.join(source, 'ipc-standalone.md');
+  await fs.writeFile(file, '# Standalone\n\nA standalone skill.');
+  const importSkill = (kind: unknown) => handlers.get('skills:import')!(null, { kind }) as Promise<any>;
+  const removeSkill = (id: unknown) => handlers.get('skills:remove')!(null, { id }) as Promise<any>;
+  expect(await importSkill('file')).toMatchObject({ ok: true, data: null });
+  expect(await listSkills()).toEqual([]);
+  vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({ canceled: false, filePaths: [folder] });
+  expect(await importSkill('folder')).toMatchObject({ ok: true, data: [{ id: 'ipc-package', path: '/skills/ipc-package/SKILL.md' }] });
+  expect(dialog.showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ properties: ['openDirectory'] }));
+  expect(await fs.readFile(path.join(dir, 'skills', 'ipc-package', 'references', 'guide.md'), 'utf8')).toBe('Guide');
+  vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({ canceled: false, filePaths: [file] });
+  expect(await importSkill('file')).toMatchObject({ ok: true });
+  expect(dialog.showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ properties: ['openFile'] }));
+  expect((await listSkills()).map(skill => skill.id)).toEqual(['ipc-package', 'ipc-standalone']);
+  expect((await importSkill('zip')).ok).toBe(false);
+  expect((await removeSkill('../ipc-package')).ok).toBe(false);
+  expect((await listSkills()).map(skill => skill.id)).toContain('ipc-package');
+  vi.mocked(shell.trashItem).mockImplementationOnce(async directory => fs.rename(directory, path.join(dir, 'trashed-ipc-package')));
+  expect(await removeSkill('ipc-package')).toMatchObject({ ok: true });
+  expect(shell.trashItem).toHaveBeenCalledWith(path.join(dir, 'skills', 'ipc-package'));
+  expect((await listSkills()).map(skill => skill.id)).toEqual(['ipc-standalone']);
+});
+
+it('exposes only validated GitHub import and exact-skill update requests to the renderer', async () => {
+  const url = 'https://github.com/acme/skills/tree/main/review';
+  expect(await handlers.get('skills:githubImport')!(null, { url })).toMatchObject({ ok: true, data: [{ id: 'review' }] });
+  expect(githubSkillIpcMocks.import).toHaveBeenCalledWith(url);
+  expect((await handlers.get('skills:githubImport')!(null, { url: '' }) as any).ok).toBe(false);
+  expect((await handlers.get('skills:githubImport')!(null, { url, path: 'C:/outside' }) as any).ok).toBe(false);
+  expect(await handlers.get('skills:githubCheck')!(null, { id: 'review' })).toMatchObject({ ok: true, data: [{ state: 'available' }] });
+  expect(githubSkillIpcMocks.check).toHaveBeenCalledWith('review');
+  expect((await handlers.get('skills:githubCheck')!(null, { id: '../review' }) as any).ok).toBe(false);
+  expect(await handlers.get('skills:githubUpdate')!(null, { id: 'review' })).toMatchObject({ ok: true, data: { status: 'current' } });
+  expect(githubSkillIpcMocks.update).toHaveBeenCalledWith('review', expect.any(Function));
+  expect((await handlers.get('skills:githubUpdate')!(null, { id: '../review' }) as any).ok).toBe(false);
+  expect(githubSkillIpcMocks.update).toHaveBeenCalledTimes(1);
 });
 
 it('keeps origin history navigation separate from live revision cursors over IPC', async () => {

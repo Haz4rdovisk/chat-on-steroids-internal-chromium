@@ -399,9 +399,31 @@ guards still apply. This root is not saved in config, does not satisfy connectio
 and never becomes the default or learned project cwd, including native paths through an
 overlapping approved root. Desktop and external plugins receive no managed root.
 
+The sidebar Skills page sits below Plugins and lists only the managed CoS library. Its import
+control chooses a complete package folder (with `SKILL.md` and resources), one Markdown file
+through the OS picker, or a public GitHub folder/`SKILL.md` URL. `skills.ts` validates and
+publishes all three into the same canonical root. GitHub imports carry CoS-owned origin metadata
+in a reserved sidecar, not the model-facing catalog. Opening the Skills page checks GitHub
+imports for updates using one bounded metadata-only tree read per repository/ref; the cards
+show checking, current, available or failed observations. A recent result can be reused on
+navigation; explicit Refresh checks again. A check never installs anything and its result is
+accepted only for the exact installed origin revision. The per-card confirmed update then
+checks a pinned public repository snapshot, stages a complete replacement, and moves the
+previous version to OS Trash; unchanged packages are left alone, and local edits to `SKILL.md`
+veto replacement. The update dialog warns that resource edits will be replaced. No background
+poller, GitHub credential, new root or execution authority is introduced. Remove moves a
+managed package to the OS Trash after confirmation. Search is a catalog projection; project
+and external skills remain discoverable in the composer but are not presented as installed CoS packages.
+
 Skills open through leading `/` completion in the composer; the attachment popup's Skills button
 inserts that leading slash and focuses the input while preserving existing draft text. Commands and Skills are
-separate compact sections; there is no sidebar entry, modal library or native import/remove UI.
+separate compact sections; the sidebar library does not add a second Skills selection ledger.
+A Goal, Loop or Plan selected through completion projects the owning automation/workflow state on
+the compact Chat options control. Goal/Loop and Plan may coexist, so combined labels show both;
+the label and semantic icon are presentation only and never become another mode ledger. Selecting
+Compact through completion arms a removable composer pill. It invokes the existing exact-session
+compaction owner only when Send is pressed, retains the authored message for the resumed chat and
+keeps the pill on a refused call; it is unavailable without an existing eligible session.
 A small plus icon to the right of that Skills button inserts `Please add the following skills to my COS skills:`
 into the authored draft without sending it. ChatGPT can create Markdown instructions through
 the existing permission-checked `/skills` filesystem root. Leading `/id` or `/prompt id` completion projects selected
@@ -798,6 +820,10 @@ The desktop composer uses native CSS content sizing, bounded at 220px. Layout ow
 height across draft changes, hidden panels and width changes; do not persist a measured
 `scrollHeight` as an inline height. Empty and fitting input must not overflow; longer text
 remains scrollable at the cap. `scripts/verify-composer-layout.cjs` checks real Electron layout.
+On an empty chat, the welcome prompt is anchored to the stable composition viewport spanning
+the conversation body, dock and composer. Selected Skill/action pills and attachments may grow
+the composer without recentering that prompt against the smaller residual body row;
+`scripts/verify-composer-context.cjs` checks the invariant across widths and wrapped pill rows.
 
 `session/start-input.ts` returns durable local admission before waiting for connector readiness
 or browser delivery. Each New Chat opening reserves its own local session in the outbox, then
@@ -2508,6 +2534,12 @@ repaints. `scripts/verify-renderer-label-memory.cjs` checks real Chromium collec
 row replacement; ordinary language tests preserve controls, drafts and authored values.
 Authored prose uses automatic text direction; shell/code remain LTR with logical layout edges.
 Theme and layout preferences do not change backend authority.
+Workspace Settings uses the same centered 940px canvas, heading hierarchy and bounded surfaces
+as the Plugins, Skills and Pets libraries. Its sections remain one semantic column in the order
+Permissions, Folders, Health and Activity: the approved-folder list has unbounded height and must
+not displace or strand a neighboring column. Existing control IDs and main-process owners remain
+unchanged. `scripts/verify-workspace-ui.cjs` checks the order, shared width and overflow in real
+Chromium with both desktop and narrow viewports, including a long folder list.
 Settings places ChatGPT model defaults second and Workers & recovery third, after Continuation
 sources. Appearance has its own Settings navigation page, including the language selector and
 existing setup profiles. The connector-instructions editor

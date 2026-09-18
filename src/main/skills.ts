@@ -7,7 +7,11 @@ import {
   MAX_SKILL_DESCRIPTION_CHARS,
   MAX_SKILL_NAME_CHARS,
   MAX_SKILLS,
+  SKILL_ORIGIN_FILENAME,
   SKILL_ID_PATTERN,
+  validGitHubSkillOrigin,
+  type GitHubSkillOrigin,
+  type ManagedSkill,
   type SkillSummary
 } from '../shared/skills.js';
 
@@ -281,6 +285,35 @@ async function scan(candidateRoot: string): Promise<SkillRecord[]> {
   return records;
 }
 
+async function originAt(candidateRoot: string, id: string): Promise<GitHubSkillOrigin | null> {
+  const filename = path.join(candidateRoot, id, SKILL_ORIGIN_FILENAME);
+  try {
+    const stat = await fs.lstat(filename);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) return null;
+    const real = process.platform === 'win32' ? await rawRealpathNative(filename) : await fs.realpath(filename);
+    if (!sameNativePath(real, filename)) return null;
+    const snapshot = await readTextSnapshot(filename);
+    const value: unknown = JSON.parse(snapshot.text);
+    return validGitHubSkillOrigin(value) ? value : null;
+  } catch { return null; }
+}
+
+/** A crash between the two directory renames restores the old package before catalog scan. */
+async function recoverSkillBackups(candidateRoot: string): Promise<void> {
+  for (const name of await directoryNames(candidateRoot)) {
+    const match = /^\.backup-(.+)-([0-9a-f]{8}-[0-9a-f-]{27})$/.exec(name);
+    if (!match || !validSkillId(match[1]!)) continue;
+    const destination = path.join(candidateRoot, match[1]!);
+    try { await fs.lstat(destination); continue; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    const backup = path.join(candidateRoot, name);
+    const stat = await fs.lstat(backup);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || !sameNativePath(await fs.realpath(backup), backup)) continue;
+    if (!(await originAt(candidateRoot, name))) continue;
+    await fs.rename(backup, destination);
+  }
+}
+
 function publish(records: SkillRecord[]): void {
   catalog = records.map(record => ({ ...record.summary }));
 }
@@ -304,6 +337,7 @@ export function initSkillsPath(userData: string): Promise<void> {
     try { await fs.mkdir(candidate); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
     await assertManagedRoot(candidate);
+    await recoverSkillBackups(candidate);
     const records = await scan(candidate);
     root = candidate;
     publish(records);
@@ -316,6 +350,19 @@ export function listSkills(): Promise<SkillSummary[]> {
     const records = await scan(requiredRoot());
     publish(records);
     return catalog.map(summary => ({ ...summary }));
+  });
+}
+
+export function listManagedSkills(): Promise<ManagedSkill[]> {
+  return serial(async () => {
+    if (!root) return [];
+    const candidateRoot = requiredRoot();
+    const records = await scan(candidateRoot);
+    const result: ManagedSkill[] = [];
+    for (const record of records) result.push({ ...record.summary, origin: await originAt(candidateRoot, record.summary.id) });
+    await assertManagedRoot(candidateRoot);
+    publish(records);
+    return result;
   });
 }
 
@@ -394,31 +441,113 @@ export function importSkillFile(sourcePath: string): Promise<SkillSummary> {
   });
 }
 
+async function packageDocument(sourcePath: string): Promise<{ id: string; bytes: Buffer; revision: string }> {
+  if (!path.isAbsolute(sourcePath)) throw new Error('Choose an absolute skill package folder');
+  const sourceDirectory = await fs.lstat(sourcePath);
+  if (!sourceDirectory.isDirectory() || sourceDirectory.isSymbolicLink()) throw new Error('Choose a real skill package folder');
+  const id = slugSkillId(path.basename(sourcePath));
+  const sourceFile = path.join(sourcePath, SKILL_FILENAME);
+  const sourceStat = await fs.lstat(sourceFile);
+  if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) throw new Error('A skill package needs a regular SKILL.md');
+  const document = await readTextSnapshot(sourceFile);
+  const { parseSkillFrontmatter } = await import('./skill-metadata.js');
+  parseSkillFrontmatter(document.text);
+  return { id, bytes: document.bytes, revision: createHash('sha256').update(document.bytes).digest('hex') };
+}
+
+function originBytes(origin: GitHubSkillOrigin | undefined, revision: string): Buffer | undefined {
+  if (!origin) return undefined;
+  if (!validGitHubSkillOrigin(origin) || origin.skillSha256 !== revision) throw new Error('GitHub skill origin does not match SKILL.md');
+  return Buffer.from(JSON.stringify(origin), 'utf8');
+}
+
 /** Publish a complete selected package using the same serialized managed-library owner. */
-export function importSkillPackage(sourcePath: string): Promise<SkillSummary> {
+export function importSkillPackage(sourcePath: string, origin?: GitHubSkillOrigin): Promise<SkillSummary> {
   return serial(async () => {
-    if (!path.isAbsolute(sourcePath)) throw new Error('Choose an absolute skill package folder');
-    const sourceDirectory = await fs.lstat(sourcePath);
-    if (!sourceDirectory.isDirectory() || sourceDirectory.isSymbolicLink()) throw new Error('Choose a real skill package folder');
-    const id = slugSkillId(path.basename(sourcePath));
-    const sourceFile = path.join(sourcePath, SKILL_FILENAME);
-    const sourceStat = await fs.lstat(sourceFile);
-    if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) throw new Error('A skill package needs a regular SKILL.md');
-    const document = await readTextSnapshot(sourceFile);
-    const { parseSkillFrontmatter } = await import('./skill-metadata.js');
-    parseSkillFrontmatter(document.text);
+    const document = await packageDocument(sourcePath);
+    const id = document.id;
     const candidateRoot = requiredRoot();
     const current = await scan(candidateRoot);
     if (current.length >= MAX_SKILLS) throw new Error('The Skills library supports at most 64 skills');
     const names = await directoryNames(candidateRoot);
     if (names.some(name => name.toLowerCase() === id.toLowerCase())) throw new Error(`Skill "${id}" already exists`);
     const { publishSkillPackage } = await import('./skill-package.js');
-    await publishSkillPackage(sourcePath, candidateRoot, id, document.bytes);
+    await publishSkillPackage(sourcePath, candidateRoot, id, document.bytes, originBytes(origin, document.revision));
     const records = await scan(candidateRoot);
     const installed = records.find(record => record.summary.id === id);
     if (!installed) throw new Error('The imported package changed during publication');
     publish(records);
     return { ...installed.summary };
+  });
+}
+
+/** Replace exactly one GitHub-owned package; old contents remain recoverable in OS Trash. */
+export function updateSkillPackage(
+  id: string,
+  expectedOrigin: GitHubSkillOrigin,
+  sourcePath: string,
+  nextOrigin: GitHubSkillOrigin,
+  moveToTrash: (directory: string) => Promise<void>
+): Promise<{ updated: boolean; warning?: string }> {
+  return serial(async () => {
+    assertSkillId(id);
+    const candidateRoot = requiredRoot();
+    const document = await packageDocument(sourcePath);
+    if (document.id !== id) throw new Error('GitHub skill folder no longer matches the installed skill');
+    const metadata = originBytes(nextOrigin, document.revision);
+    if (!metadata || !validGitHubSkillOrigin(expectedOrigin) || nextOrigin.url !== expectedOrigin.url)
+      throw new Error('GitHub skill source changed');
+    await assertManagedRoot(candidateRoot);
+    const old = await recordAt(candidateRoot, id);
+    const oldOrigin = await originAt(candidateRoot, id);
+    if (!old || !oldOrigin || oldOrigin.url !== expectedOrigin.url || oldOrigin.revision !== expectedOrigin.revision)
+      throw new Error('The skill changed while checking for updates; reload the library');
+    if (nextOrigin.revision === oldOrigin.revision) return { updated: false };
+    if (old.revision !== oldOrigin.skillSha256)
+      throw new Error('SKILL.md has local edits; preserve them before updating from GitHub');
+    const oldDirectory = identityOf(await fs.lstat(path.join(candidateRoot, id)));
+
+    const operation = randomUUID();
+    const stage = path.join(candidateRoot, `.update-${id}-${operation}`);
+    const backup = path.join(candidateRoot, `.backup-${id}-${operation}`);
+    const destination = path.join(candidateRoot, id);
+    const { publishSkillPackage } = await import('./skill-package.js');
+    await publishSkillPackage(sourcePath, candidateRoot, path.basename(stage), document.bytes, metadata);
+    const stageDirectory = identityOf(await fs.lstat(stage));
+    let oldMoved = false, nextMoved = false;
+    try {
+      const current = await recordAt(candidateRoot, id);
+      const currentOrigin = await originAt(candidateRoot, id);
+      if (!current || current.revision !== old.revision || !currentOrigin || currentOrigin.revision !== oldOrigin.revision ||
+          !sameIdentity(oldDirectory, identityOf(await fs.lstat(destination))))
+        throw new Error('The skill changed before update; reload the library');
+      await assertManagedRoot(candidateRoot);
+      await fs.rename(destination, backup); oldMoved = true;
+      await fs.rename(stage, destination); nextMoved = true;
+      const installed = await recordAt(candidateRoot, id);
+      const installedOrigin = await originAt(candidateRoot, id);
+      if (!installed || installed.revision !== document.revision || installedOrigin?.revision !== nextOrigin.revision)
+        throw new Error('The updated skill could not be verified');
+      publish(await scan(candidateRoot));
+    } catch (error) {
+      let restored = true;
+      if (nextMoved) try { await fs.rename(destination, stage); } catch { restored = false; }
+      if (oldMoved) try { await fs.rename(backup, destination); } catch { restored = false; }
+      if (restored) {
+        try {
+          if (sameFileObject(stageDirectory, identityOf(await fs.lstat(stage)))) await moveToTrash(stage);
+        } catch { /* Keep an unclaimed stage rather than trashing another path. */ }
+      }
+      if (!restored) throw new Error('Skill update could not restore the previous version; its backup was kept in Skills storage', { cause: error });
+      throw error;
+    }
+    try {
+      const stored = identityOf(await fs.lstat(backup));
+      if (!sameFileObject(oldDirectory, stored)) throw new Error('The previous skill folder changed before cleanup');
+      await moveToTrash(backup);
+    }
+    catch { return { updated: true, warning: 'Updated, but the previous version could not be moved to Trash' }; }
+    return { updated: true };
   });
 }
 

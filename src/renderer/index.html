@@ -38,6 +38,7 @@
         <div class="sidebar-primary" id="sidebarPrimary">
           <button class="btn new-chat" id="newChat" type="button"><i class="ico ph ph-pencil-simple" aria-hidden="true"></i>New chat</button>
           <button class="btn sidebar-primary-link" id="sidebarPlugins" data-sidebar-page="plugins" type="button"><i class="ico ph ph-puzzle-piece" aria-hidden="true"></i>Plugins</button>
+          <button class="btn sidebar-primary-link" id="sidebarSkills" data-sidebar-page="skills" type="button"><i class="ico ph ph-cube" aria-hidden="true"></i>Skills</button>
           <button class="btn sidebar-primary-link" id="sidebarPets" data-sidebar-page="pets" type="button"><i class="ico ph ph-paw-print" aria-hidden="true"></i>Pets</button>
         </div>
       <nav id="tabs" aria-label="Settings navigation" hidden>
@@ -259,6 +260,23 @@
           <details class="plugin-legal"><summary>Legal Notices / Third-party Licenses</summary><p>Catalog illustrations are original Chat On Steroids artwork, Copyright © 2026 Chat On Steroids contributors, licensed under the app’s MIT license. They illustrate independent integrations and are not official product logos or endorsements. Product names belong to their respective owners.</p><p>Installed plugins retain their own licenses. Open a plugin’s details to see its source, version and license. Review the upstream project before installation. Bundled dependency notices and reviewed catalog license texts are included in THIRD-PARTY-NOTICES.txt with the application; external plugins are downloaded separately.</p><button class="btn" id="pluginsLegalOpen" type="button">Open full third-party license texts</button></details>
           </div>
         </section>
+        <section class="panel plugins-panel skills-panel" data-panel="skills">
+          <div class="plugins-content">
+            <header class="plugin-page-head"><div><h1>Skills</h1><p>Reusable instructions for the work you do in Chat On Steroids.</p></div><div class="plugin-search-actions"><label class="plugin-search"><i class="ico ph ph-magnifying-glass" aria-hidden="true"></i><input id="skillsSearch" type="search" placeholder="Search skills" aria-label="Search skills" /></label><details class="plugin-menu skill-import-menu"><summary class="btn plugin-add" aria-label="Import a skill" title="Import a skill"><i class="ico ph ph-plus" aria-hidden="true"></i></summary><div class="plugin-menu-actions"><button class="btn" id="skillsImportFolder" type="button">Import folder</button><button class="btn" id="skillsImportFile" type="button">Import SKILL.md</button><button class="btn" id="skillsImportGithub" type="button">Import from GitHub</button></div></details></div></header>
+            <div class="plugin-refresh-guide pet-import-guide"><p>Import a folder, a standalone SKILL.md, or a public GitHub skill. CoS checks GitHub skills when you open this page; installing an update stays your choice.</p></div>
+            <dialog class="plugin-dialog pet-delete-dialog" id="skillGithubDialog" aria-labelledby="skillGithubTitle">
+              <div class="plugin-dialog-head"><h2 id="skillGithubTitle">Import from GitHub</h2><button class="btn" id="skillGithubClose" type="button">Close</button></div>
+              <form id="skillGithubForm" class="plugin-dialog-body">
+                <p>Paste a public GitHub folder link or a link to its SKILL.md. The complete skill folder will be copied to your CoS library.</p>
+                <label class="plugin-field" for="skillGithubUrl">GitHub URL<input id="skillGithubUrl" type="url" required autocomplete="url" spellcheck="false" placeholder="https://github.com/owner/repo/tree/main/skill" /></label>
+                <p id="skillGithubError" class="plugin-error" role="alert" hidden></p>
+                <div class="pet-delete-actions"><button class="btn" id="skillGithubCancel" type="button">Cancel</button><button class="btn btn-solid" id="skillGithubSubmit" type="submit">Import skill</button></div>
+              </form>
+            </dialog>
+            <div class="plugin-section-head"><h2>Installed <span id="skillsCount" class="plugin-count">Loading…</span></h2><button class="btn" id="skillsRefresh" type="button">Refresh</button></div>
+            <div id="skillsInstalled" class="pet-library-grid" aria-live="polite"></div>
+          </div>
+        </section>
         <section class="panel plugins-panel pets-panel" data-panel="pets">
           <div class="plugins-content">
             <header class="plugin-page-head"><div><h1>Pets</h1><p>Your little desktop companions.</p></div><div class="plugin-search-actions"><label class="plugin-search"><i class="ico ph ph-magnifying-glass" aria-hidden="true"></i><input id="petsSearch" type="search" placeholder="Search pets" aria-label="Search pets" /></label><button class="btn plugin-add" id="petsImport" type="button" aria-label="Import CoS Pet folder" title="Import CoS Pet folder"><i class="ico ph ph-plus" aria-hidden="true"></i></button></div></header>
@@ -303,102 +321,105 @@
         </section>
         <!-- ============================================================ Home -->
         <section class="panel" data-panel="home">
-          <div class="settings-heading"><h1>Workspace</h1><p>Choose what ChatGPT can access and keep your connection healthy.</p></div>
-          <div class="top">
-            <!-- ------------------------------------------------- permissions -->
-            <section class="card">
-              <h2>
-                Permissions
-                <span class="acts">
-                  <button class="btn" id="readOnlyBtn" type="button">
-                    <i class="ico ph ph-lock-key" aria-hidden="true"></i>Read-only
-                  </button>
-                </span>
-              </h2>
-              <div class="scroll">
-                <div id="groups"></div>
-                <div class="desktop-access" id="desktopAccess" hidden>
-                  <strong id="desktopAccessTitle">Desktop access needs attention</strong>
-                  <p id="desktopAccessDetail"></p>
-                  <button class="btn btn-solid" id="requestDesktopAccessibility" type="button">Request Accessibility</button>
-                  <button
-                    class="btn"
-                    id="openDesktopScreen"
-                    type="button"
-                    data-link="x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-                  >Open Screen Recording settings</button>
-                  <button
-                    class="btn"
-                    id="openDesktopAccessibility"
-                    type="button"
-                    data-link="x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-                  >Open Accessibility settings</button>
-                </div>
-              </div>
-            </section>
-
-            <!-- ----------------------------------------------------- folders -->
-            <section class="card" id="foldersCard">
-              <h2>
-                Folders
-                <span class="acts">
-                  <button class="btn" id="addFolder" type="button">
-                    <i class="ico ph ph-plus" aria-hidden="true"></i>Add
-                  </button>
-                </span>
-              </h2>
-              <div class="scroll">
-                <div id="rootList"></div>
-                <p class="empty" id="rootsEmpty">
-                  Nothing shared yet. Press Add or drop a folder here. ChatGPT sees short names
-                  like <code>/project</code> — your real system paths are never sent.
-                </p>
-              </div>
-            </section>
-
-            <!-- ------------------------------------------------------ health -->
-            <section class="card">
-              <h2>
-                Health
-                <span class="acts">
-                  <button class="btn" id="runChecks" type="button">
-                    <i class="ico ph ph-activity" aria-hidden="true"></i>
-                    <span id="runChecksLabel">Run checks</span>
-                  </button>
-                </span>
-              </h2>
-              <div class="scroll">
-                <div class="big">
-                  <div><b id="bigHandshake">—</b><span>verified link</span></div>
-                  <div><b id="bigRequest">—</b><span>last ChatGPT call</span></div>
-                </div>
-                <div class="facts" id="facts"></div>
-                <div class="checks" id="checksBox" hidden>
-                  <div class="checks-head">
-                    <strong id="checksSummary"></strong>
-                    <button class="btn btn-quiet" id="closeChecks" type="button">
-                      <i class="ico ph ph-x" aria-hidden="true"></i>
+          <div class="workspace-content">
+            <header class="workspace-page-head">
+              <h1>Workspace</h1>
+              <p>Choose what ChatGPT can access and keep your connection healthy.</p>
+            </header>
+            <div class="workspace-layout">
+              <div class="workspace-column">
+                <!-- ----------------------------------------------- permissions -->
+                <section class="workspace-section workspace-permissions">
+                  <header class="workspace-section-head">
+                    <div><h2>Permissions</h2><p>Control which local capabilities ChatGPT can use.</p></div>
+                    <button class="btn" id="readOnlyBtn" type="button">
+                      <i class="ico ph ph-lock-key" aria-hidden="true"></i>Read-only
                     </button>
+                  </header>
+                  <div class="workspace-surface scroll">
+                    <div id="groups"></div>
+                    <div class="desktop-access" id="desktopAccess" hidden>
+                      <strong id="desktopAccessTitle">Desktop access needs attention</strong>
+                      <p id="desktopAccessDetail"></p>
+                      <button class="btn btn-solid" id="requestDesktopAccessibility" type="button">Request Accessibility</button>
+                      <button
+                        class="btn"
+                        id="openDesktopScreen"
+                        type="button"
+                        data-link="x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+                      >Open Screen Recording settings</button>
+                      <button
+                        class="btn"
+                        id="openDesktopAccessibility"
+                        type="button"
+                        data-link="x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+                      >Open Accessibility settings</button>
+                    </div>
                   </div>
-                  <ul id="checkList"></ul>
-                </div>
-              </div>
-            </section>
-          </div>
+                </section>
 
-          <!-- ---------------------------------------------------- activity -->
-          <section class="card">
-            <h2>
-              Activity
-              <span class="acts">
-                <span class="problems" id="homeProblems" hidden></span>
-                <button class="btn" id="copyLog" type="button">
-                  <i class="ico ph ph-copy" aria-hidden="true"></i>Copy
-                </button>
-              </span>
-            </h2>
-            <div class="scroll feed" id="homeFeed"></div>
-          </section>
+                <!-- -------------------------------------------------- activity -->
+                <section class="workspace-section workspace-activity">
+                  <header class="workspace-section-head">
+                    <div><h2>Activity</h2><p>Recent local events and failures.</p></div>
+                    <span class="workspace-section-actions">
+                      <span class="problems" id="homeProblems" hidden></span>
+                      <button class="btn" id="copyLog" type="button">
+                        <i class="ico ph ph-copy" aria-hidden="true"></i>Copy
+                      </button>
+                    </span>
+                  </header>
+                  <div class="workspace-surface scroll feed" id="homeFeed"></div>
+                </section>
+              </div>
+
+              <div class="workspace-column">
+                <!-- --------------------------------------------------- folders -->
+                <section class="workspace-section" id="foldersCard">
+                  <header class="workspace-section-head">
+                    <div><h2>Folders</h2><p>Approved locations available to local tools.</p></div>
+                    <button class="btn" id="addFolder" type="button">
+                      <i class="ico ph ph-plus" aria-hidden="true"></i>Add
+                    </button>
+                  </header>
+                  <div class="workspace-surface scroll">
+                    <div id="rootList"></div>
+                    <p class="empty" id="rootsEmpty">
+                      Nothing shared yet. Press Add or drop a folder here. ChatGPT sees short names
+                      like <code>/project</code> — your real system paths are never sent.
+                    </p>
+                  </div>
+                </section>
+
+                <!-- ---------------------------------------------------- health -->
+                <section class="workspace-section workspace-health">
+                  <header class="workspace-section-head">
+                    <div><h2>Health</h2><p>Connection and runtime status.</p></div>
+                    <button class="btn" id="runChecks" type="button">
+                      <i class="ico ph ph-activity" aria-hidden="true"></i>
+                      <span id="runChecksLabel">Run checks</span>
+                    </button>
+                  </header>
+                  <div class="workspace-surface scroll">
+                    <div class="big">
+                      <div><b id="bigHandshake">—</b><span>verified link</span></div>
+                      <div><b id="bigRequest">—</b><span>last ChatGPT call</span></div>
+                    </div>
+                    <div class="facts" id="facts"></div>
+                    <div class="checks" id="checksBox" hidden>
+                      <div class="checks-head">
+                        <strong id="checksSummary"></strong>
+                        <button class="btn btn-quiet" id="closeChecks" type="button">
+                          <i class="ico ph ph-x" aria-hidden="true"></i>
+                        </button>
+                      </div>
+                      <ul id="checkList"></ul>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- =========================================================== Setup -->
@@ -931,7 +952,7 @@
             <div class="composer-dock" id="composerDock"><section class="agent-plan" id="agentPlan" aria-label="Agent task plan" hidden></section><div id="recoveryStatus" role="status" hidden></div><div id="taskPlanPreview" aria-label="Plan stages" hidden></div><div id="finishQueue" aria-label="Queued tasks" hidden></div><div id="activeGoalRow" hidden></div></div>
             <form class="composer" id="composer">
               <div id="skillPicker" class="skill-autocomplete" aria-label="Skills" hidden></div>
-              <div id="composerSelectedSkills" class="composer-selected-skills" aria-label="Selected skills" hidden></div>
+              <div id="composerSelectedSkills" class="composer-selected-skills" aria-label="Selected skills and actions" hidden></div>
               <label class="sr-only" for="chatInput">Message ChatGPT</label>
               <div id="composerImages" class="composer-images" hidden></div><textarea dir="auto" id="chatInput" rows="1" placeholder="Ask anything…"></textarea>
               <div class="composer-toolbar">
@@ -948,7 +969,7 @@
                 </details>
                 <div class="composer-options">
                   <details class="composer-menu" id="composerSettings">
-                    <summary aria-label="Chat options" title="Chat options"><i class="ico ph ph-gear-six" aria-hidden="true"></i></summary>
+                    <summary id="composerSettingsSummary" aria-label="Chat options" title="Chat options"><i class="ico ph ph-gear-six" id="composerModeIcon" aria-hidden="true"></i><span id="composerModeLabel" aria-live="polite" hidden></span></summary>
                     <div class="composer-popover">
                       <div class="automation-switch" id="automationSwitch" role="radiogroup" aria-label="Chat mode">
                         <button type="button" role="radio" aria-checked="true" data-mode="off" data-keep-menu="true">Off</button>
@@ -997,7 +1018,7 @@
                     </div>
                     <select id="sendMode" aria-label="Message delivery" hidden><option value="auto">Send</option><option value="tool">Inject now</option><option value="after-turn">After this turn</option></select>
                   </div>
-                  <button class="send-button" id="chatSend" type="submit" aria-label="Send message"><i class="ph ph-arrow-up send-icon" aria-hidden="true"></i></button>
+                  <button class="send-button" id="chatSend" type="submit" aria-label="Send message" disabled><i class="ph ph-arrow-up send-icon" aria-hidden="true"></i></button>
                 </div>
               </div>
               <p id="composerStatus" role="status" aria-live="polite"></p>

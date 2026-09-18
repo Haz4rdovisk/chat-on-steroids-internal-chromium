@@ -10,6 +10,7 @@ import { initSetupGuide } from './setup-guide.js';
 import { initAppearance } from './appearance.js';
 import { initPet } from './pet.js';
 import { initPets } from './pets.js';
+import { initSkillsLibrary } from './skills-library.js';
 import type { AppearanceSettings } from '../shared/appearance.js';
 /**
  * Renderer. No Node, no filesystem, no network — everything goes through window.api.
@@ -129,11 +130,12 @@ let openGroup: string | null = null;
 let showAllSteps: boolean | null = null;
 let setupProfileBusy = false;
 let setupKeySave: Promise<boolean> = Promise.resolve(true);
+let openSkillsLibrary: () => void = () => undefined;
 
 // ------------------------------------------------------------------- tabs
 
 function showTab(name: string): void {
-  const library = name === 'plugins' || name === 'pets';
+  const library = name === 'plugins' || name === 'skills' || name === 'pets';
   const settings = name !== 'chat' && !library;
   document.querySelector<HTMLElement>('.app')!.dataset.screen = library ? 'library' : settings ? 'settings' : 'chat';
   document.querySelector<HTMLElement>('.sidebar-brand')!.hidden = settings;
@@ -155,6 +157,7 @@ function showTab(name: string): void {
   for (const panel of document.querySelectorAll<HTMLElement>('.panel')) {
     panel.classList.toggle('is-active', panel.dataset.panel === (name === 'settings' ? 'chat' : name));
   }
+  if (name === 'skills') openSkillsLibrary();
   // The Chat panel is the only one that costs anything to keep fresh, so it only
   // reloads while it is on screen.
   chatVisible(name === 'chat' || name === 'settings');
@@ -204,6 +207,7 @@ $('sessionList').addEventListener('click', event => {
 }, { capture: true });
 $('newChat').addEventListener('click', () => showTab('chat'));
 $('sidebarPlugins').addEventListener('click', () => showTab('plugins'));
+$('sidebarSkills').addEventListener('click', () => showTab('skills'));
 $('sidebarPets').addEventListener('click', () => showTab('pets'));
 $('addProject').addEventListener('click', () => showTab('chat'));
 $('composerFolder').addEventListener('click', () => $('addProject').click());
@@ -1857,6 +1861,7 @@ initSidebarResize();
 initUsage();
 initPlugins(apply);
 initPets(api, pet);
+openSkillsLibrary = initSkillsLibrary(api);
 initBrowserPreferences();
 initChat({ save: () => save(), state: () => state });
 

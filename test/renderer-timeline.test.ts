@@ -1371,6 +1371,7 @@ it('Share a folder creates a sidebar project and keeps it when an older list ref
   expect(w.document.querySelector(`[data-project-id="${project.id}"]`)).not.toBeNull();
   expect(input.placeholder).toContain('Shared');
   input.value = 'Work in this folder';
+  input.dispatchEvent(new w.Event('input'));
   (w.document.getElementById('chatSend') as HTMLButtonElement).click();
   await settle();
   expect(live.sent[0]).toMatchObject({ sessionId: null, projectId: project.id, text: 'Work in this folder' });
@@ -1384,6 +1385,7 @@ it('preserves the draft and refuses send while model discovery has no confirmed 
   await settle();
   const input = w.document.getElementById('chatInput') as HTMLTextAreaElement;
   input.value = 'Keep this until a real model is selected';
+  input.dispatchEvent(new w.Event('input'));
   (w.document.getElementById('chatSend') as HTMLButtonElement).click();
   await settle();
   expect(input.value).toBe('Keep this until a real model is selected');
@@ -1522,6 +1524,76 @@ it('uses slash Skills completion and delivers the selected directive once with t
   expect(live.sent).toHaveLength(1);
   expect(live.sent[0]!.text).toBe('/review\nDo my entire task.\nKeep the second line.');
   expect(w.document.querySelectorAll('.composer-selected-skill')).toHaveLength(0);
+});
+
+it('projects slash-selected Goal, Loop and Plan state on the compact composer options control', async () => {
+  const { w } = await boot([], false);
+  (w as any).api.skillLibrary = vi.fn(async () => ({ ok: true, data: { skills: [], roots: [], errors: [], includeInstructions: true } }));
+  const input = w.document.getElementById('chatInput') as HTMLTextAreaElement;
+  const summary = w.document.getElementById('composerSettingsSummary')!;
+  const label = w.document.getElementById('composerModeLabel')!;
+  const icon = w.document.getElementById('composerModeIcon')!;
+  const choose = async (command: string) => {
+    input.value = `/${command}`;
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await settle();
+    w.document.querySelector<HTMLButtonElement>(`.skill-choice[title="/${command}"]`)!.click();
+    await settle();
+  };
+
+  expect(label.hidden).toBe(true);
+  expect(summary.getAttribute('aria-label')).toBe('Chat options');
+  expect(icon.classList.contains('ph-gear-six')).toBe(true);
+  w.document.getElementById('createPlan')!.click();
+  expect(label.textContent).toBe('Plan');
+  expect(icon.classList.contains('ph-list-checks')).toBe(true);
+  w.document.getElementById('createPlan')!.click();
+  await choose('goal');
+  expect(label.textContent).toBe('Goal');
+  expect(summary.getAttribute('aria-label')).toBe('Chat options: Goal selected');
+  expect(icon.classList.contains('ph-target')).toBe(true);
+  await choose('loop');
+  expect(label.textContent).toBe('Loop');
+  expect(summary.getAttribute('aria-label')).toBe('Chat options: Loop selected');
+  expect(icon.classList.contains('ph-arrows-clockwise')).toBe(true);
+  await choose('plan');
+  expect(label.textContent).toBe('Loop + Plan');
+  expect(summary.getAttribute('aria-label')).toBe('Chat options: Loop and Plan selected');
+  (w.document.querySelector('#automationSwitch [data-mode="goal"]') as HTMLButtonElement).click();
+  expect(label.textContent).toBe('Goal + Plan');
+  expect(summary.getAttribute('aria-label')).toBe('Chat options: Goal and Plan selected');
+  w.document.getElementById('createPlan')!.click();
+  expect(label.textContent).toBe('Goal');
+  (w.document.querySelector('#automationSwitch [data-mode="off"]') as HTMLButtonElement).click();
+  expect(label.hidden).toBe(true);
+  expect(summary.getAttribute('aria-label')).toBe('Chat options');
+  expect(icon.classList.contains('ph-gear-six')).toBe(true);
+});
+
+it.each([true, false])('arms Compact as a removable composer pill and executes it only on Send (accepted=%s)', async accepted => {
+  const { w, live } = await boot([]);
+  (w as any).api.skillLibrary = vi.fn(async () => ({ ok: true, data: { skills: [], roots: [], errors: [], includeInstructions: true } }));
+  const refusedCompact = vi.fn(async () => ({ ok: false, error: 'Compaction refused' }));
+  if (!accepted) (w as any).api.compactSession = refusedCompact;
+  const input = w.document.getElementById('chatInput') as HTMLTextAreaElement;
+  input.value = '/compact'; input.setSelectionRange(input.value.length, input.value.length);
+  input.dispatchEvent(new w.Event('input', { bubbles: true })); await settle();
+  w.document.querySelector<HTMLButtonElement>('.skill-choice[title="/compact"]')!.click(); await settle();
+
+  const pill = () => w.document.querySelector<HTMLElement>('.composer-selected-skill[data-command="compact"]');
+  expect(pill()?.textContent).toContain('Compact');
+  expect(input.value).toBe('');
+  expect(live.controlCalls).toEqual([]);
+  expect((w.document.getElementById('chatSend') as HTMLButtonElement).disabled).toBe(false);
+  expect(w.document.getElementById('chatSend')!.getAttribute('aria-label')).toBe('Compact & resume');
+
+  w.document.getElementById('composer')!.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  expect(live.sent).toEqual([]);
+  expect(live.controlCalls).toEqual(accepted ? [{ id: summary([]).id, action: 'compact' }] : []);
+  expect(refusedCompact).toHaveBeenCalledTimes(accepted ? 0 : 1);
+  expect(!!pill()).toBe(!accepted);
 });
 
 it('keeps Projects and Chats separate while preserving disclosure state through activity refresh', async () => {
@@ -2005,6 +2077,24 @@ it('shows elapsed work for the exact recorded turn without exposing lifecycle ro
 });
 
 
+it('enables Send only for a meaningful draft, including attachment-only input', async () => {
+  const { w } = await boot([], false);
+  const input = w.document.getElementById('chatInput') as HTMLTextAreaElement;
+  const send = w.document.getElementById('chatSend') as HTMLButtonElement;
+  expect(send.disabled).toBe(true);
+  input.value = '   '; input.dispatchEvent(new w.Event('input'));
+  expect(send.disabled).toBe(true);
+  input.value = 'A message'; input.dispatchEvent(new w.Event('input'));
+  expect(send.disabled).toBe(false);
+  input.value = ''; input.dispatchEvent(new w.Event('input'));
+  expect(send.disabled).toBe(true);
+  (w as any).api.chooseFiles = async () => ({ ok: true, data: [{ id: '11111111-2222-4333-8444-555555555555', name: 'image.png', mimeType: 'image/png', size: 42 }] });
+  w.document.getElementById('attachImages')!.click(); await settle();
+  expect(send.disabled).toBe(false);
+  (w.document.querySelector('[aria-label="Remove image.png"]') as HTMLButtonElement).click();
+  expect(send.disabled).toBe(true);
+});
+
 it('stops directly from the empty composer without a second Stop menu action', async () => {
   const { w } = await boot([]);
   const stop = vi.fn(async () => ({ ok: true, data: {} }));
@@ -2036,6 +2126,7 @@ it('shows Stop immediately for a queued first send, switches to Send for a new d
   const send = w.document.getElementById('chatSend') as HTMLButtonElement;
   const form = w.document.getElementById('composer')!;
   input.value = 'First request';
+  input.dispatchEvent(new w.Event('input'));
   form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
   expect(send.dataset.action).toBe('stop');
   expect(send.disabled).toBe(false);

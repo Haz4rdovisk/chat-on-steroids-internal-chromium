@@ -920,15 +920,19 @@ function paintDeliveryControls(): void {
   $('sendOptions').hidden = !canInject && !canSendDirectly && !queueAtFinish;
   const send = $<HTMLButtonElement>('chatSend');
   const planMode = taskPlans.has(draftKey()), preparedPlan = currentPreparedPlan();
-  send.disabled = !!preparedPlan && (preparedPlan.sending || preparedPlan.stages.some(stage => !stage.trim()));
+  const compactMode = skillPicker?.hasCommand('compact') === true;
+  const hasDraft = !!authoredComposerText().trim() || files.length > 0;
+  send.disabled = !stop && (preparedPlan
+    ? !compactMode && (preparedPlan.sending || preparedPlan.stages.some(stage => !stage.trim()))
+    : !hasDraft);
   send.dataset.action = stop ? 'stop' : 'send';
-  ui(send, 'aria-label', () => stop ? (controlledStopPending ? t("Stop requested") : t("Stop turn")) : t("Send message"));
+  ui(send, 'aria-label', () => stop ? (controlledStopPending ? t("Stop requested") : t("Stop turn")) : compactMode ? t("Compact & resume") : t("Send message"));
   if (stop && !working && pending) ui(send, 'aria-label', () => t("Cancel delivery"));
   const planAction = selectedId ? t("Queue plan at Session finish") : t("Start full plan");
   if (preparedPlan && !stop) send.setAttribute('aria-label', planAction);
   else if (planMode && !stop) ui(send, 'aria-label', () => t("Generate plan"));
-  send.classList.toggle('is-plan-ready', !!preparedPlan && !stop);
-  ui(send, 'title', () => stop && !working && pending ? t("Cancel delivery") : preparedPlan && !stop ? planAction : planMode && !stop ? t("Click to generate plan") : '');
+  send.classList.toggle('is-plan-ready', !!preparedPlan && !compactMode && !stop);
+  ui(send, 'title', () => stop && !working && pending ? t("Cancel delivery") : compactMode && !stop ? t("Compact & resume") : preparedPlan && !stop ? planAction : planMode && !stop ? t("Click to generate plan") : '');
   send.classList.toggle('is-stop', stop);
   const sendIcon = send.querySelector<HTMLElement>('.send-icon')!;
   sendIcon.classList.toggle('ph-arrow-up', !stop);
@@ -1123,6 +1127,7 @@ function paintTaskActions(): void {
     ui(button.querySelector('span')!, 'textContent', () => planMode ? t("Cancel plan") : t("Create plan"));
     ui(button, 'title', () => planMode ? t("Return to a normal message; keep your draft") : text ? t("Split your message into editable stages") : t("Write a message in the composer first"));
   }
+  paintComposerMode();
 }
 function paintLoopDelivery(): void {
   const model = confirmedComposerModel();
@@ -1131,6 +1136,37 @@ function paintLoopDelivery(): void {
 }
 function openingLoopDelivery(): boolean | undefined {
   return selectedId === null ? $<HTMLSelectElement>('loopDelivery').value === 'after-turn' : undefined;
+}
+function paintComposerMode(): void {
+  const automation = $<HTMLSelectElement>('chatAutomation').value;
+  const plan = taskPlans.has(draftKey());
+  const state = automation === 'goal'
+    ? plan
+      ? { label: 'Goal + Plan', description: 'Chat options: Goal and Plan selected', icon: 'target' }
+      : { label: 'Goal', description: 'Chat options: Goal selected', icon: 'target' }
+    : automation === 'loop'
+      ? plan
+        ? { label: 'Loop + Plan', description: 'Chat options: Loop and Plan selected', icon: 'arrows-clockwise' }
+        : { label: 'Loop', description: 'Chat options: Loop selected', icon: 'arrows-clockwise' }
+      : plan
+        ? { label: 'Plan', description: 'Chat options: Plan selected', icon: 'list-checks' }
+        : null;
+  const summary = $('composerSettingsSummary');
+  const label = $('composerModeLabel');
+  const modeIcon = $('composerModeIcon');
+  summary.toggleAttribute('data-mode-active', !!state);
+  modeIcon.className = `ico ph ph-${state?.icon ?? 'gear-six'}`;
+  if (state) {
+    ui(label, 'textContent', () => t(state.label));
+    ui(summary, 'aria-label', () => t(state.description));
+    ui(summary, 'title', () => t(state.description));
+    label.hidden = false;
+  } else {
+    label.hidden = true;
+    ui(label, 'textContent', () => '');
+    ui(summary, 'aria-label', () => t('Chat options'));
+    ui(summary, 'title', () => t('Chat options'));
+  }
 }
 function paintAutomationSwitch(): void {
   paintLoopDelivery();
@@ -1218,6 +1254,20 @@ async function refreshSessionControls(): Promise<void> {
   $<HTMLButtonElement>('compactSession').disabled = !!controls.blocked || !!controls.job?.busy;
   $('cancelCompaction').hidden = !controls.job?.busy;
   ui($('sessionControlStatus'), 'textContent', () => controls.blocked === 'worker' ? t("This sub-agent is managed by its prime.") : controls.blocked === 'blocked' ? t("This chat is blocked.") : controls.job?.busy ? t("Compaction is running in ChatGPT.") : '');
+}
+
+async function changeSessionCompaction(cancel: boolean): Promise<boolean> {
+  const id = selectedId;
+  if (!id) return false;
+  const button = $<HTMLButtonElement>(cancel ? 'cancelCompaction' : 'compactSession');
+  if (button.disabled) return false;
+  button.disabled = true;
+  try {
+    return await run(cancel ? api.cancelSessionCompaction(id) : api.compactSession(id)) !== null;
+  } finally {
+    button.disabled = false;
+    if (selectedId === id) void refreshSessionControls();
+  }
 }
 
 async function loadDetail(navigate = false, olderBefore?: number, newerFrom?: number): Promise<boolean> {
@@ -3718,8 +3768,15 @@ async function sendComposer(delivery?: 'finish', plan?: string[], planObjective?
   const key = draftKey();
   const projectId = selectedId ? sessions.find(row => row.id === selectedId)?.projectId ?? null : selectedProjectId;
   const images = imageDrafts.get(key) ?? [];
+  // The button's disabled state is a projection for pointer/keyboard affordance.
+  // Submission still validates the owning draft and controls here so a stale paint,
+  // assistive submit or programmatic form request cannot become execution authority.
+  if (skillPicker?.hasCommand('compact')) {
+    const compacted = await changeSessionCompaction(false);
+    if (compacted) skillPicker.removeCommand('compact');
+    return compacted;
+  }
   const text = plan?.[0] ?? (authoredComposerText().trim() || (images.length ? 'Please look at the attached files.' : ''));
-  if ($<HTMLButtonElement>('chatSend').disabled) return;
   if (!text) {
     const target = selectedId, selection = selectionGeneration;
     const sameSelection = () => selectedId === target && selectionGeneration === selection;
@@ -4078,10 +4135,7 @@ export function initChat(next: Deps): void {
   }
   for (const [buttonId, cancel] of [['compactSession', false], ['cancelCompaction', true]] as const) {
     $(buttonId).addEventListener('click', async () => {
-      const id = selectedId; if (!id) return;
-      const button = $<HTMLButtonElement>(buttonId); button.disabled = true;
-      try { await run(cancel ? api.cancelSessionCompaction(id) : api.compactSession(id)); }
-      finally { button.disabled = false; if (selectedId === id) void refreshSessionControls(); }
+      await changeSessionCompaction(cancel);
     });
   }
   const appendImages = (owner: ComposerDraftOwner, chosen: InputAttachment[] | null | undefined): boolean => {
@@ -4114,10 +4168,10 @@ export function initChat(next: Deps): void {
     draft: () => inputDrafts.get(draftKey()), saveDraft: text => inputDrafts.set(draftKey(), text),
     list: scope => api.skillLibrary(scope), command: name => {
       if (name === 'plan') { $('createPlan').click(); return; }
-      if (name === 'compact') { $('compactSession').click(); return; }
       const automation = $<HTMLSelectElement>('chatAutomation'); automation.value = name;
       automation.dispatchEvent(new Event('change', { bubbles: true }));
-    } });
+    }, commandAvailable: name => name !== 'compact' || selectedId !== null,
+    deferCommand: name => name === 'compact' });
   skillPicker.restore();
   $('generateFinishGoal').addEventListener('click', async () => {
     const button = $<HTMLButtonElement>('generateFinishGoal'), id = selectedId, turnId = controlledTurnId;
@@ -4204,7 +4258,7 @@ export function initChat(next: Deps): void {
   $('composerSettings').addEventListener('toggle', paintTaskActions);
   initContextMeter();
   $('createPlan').addEventListener('click', () => { if (taskPlans.has(draftKey())) cancelTaskPlan(); else void createTaskPlan(deps.state()?.config.ui.planBackend ?? 'chatgpt'); });
-  $('composer').addEventListener('submit', (event) => { event.preventDefault(); if (currentPreparedPlan()) void sendPreparedPlan(); else if (taskPlans.has(draftKey())) { if (!$('createPlan').dataset.busy) void createTaskPlan(deps.state()?.config.ui.planBackend ?? 'chatgpt'); } else void sendComposer(); });
+  $('composer').addEventListener('submit', (event) => { event.preventDefault(); if (skillPicker?.hasCommand('compact')) void sendComposer(); else if (currentPreparedPlan()) void sendPreparedPlan(); else if (taskPlans.has(draftKey())) { if (!$('createPlan').dataset.busy) void createTaskPlan(deps.state()?.config.ui.planBackend ?? 'chatgpt'); } else void sendComposer(); });
 
   $('sessionList').addEventListener('click', (event) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-id]');

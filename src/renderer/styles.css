@@ -78,6 +78,24 @@
 .pet-library-card { height: 100%; }
 .pet-library-card .plugin-entry { height: 100%; min-height: 112px; padding: 15px 82px 38px 16px; cursor: default; }
 .pet-library-card .plugin-entry h2 { padding-right: 0; }
+.skill-import-menu { position: relative; top: auto; right: auto; flex: 0 0 44px; }
+.skill-import-menu > summary.plugin-add { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--edge); border-radius: var(--pill); background: var(--card); color: var(--ink); }
+.skill-import-menu .plugin-menu-actions { min-width: 190px; top: 50px; }
+.skill-library-card .plugin-entry { align-items: stretch; min-height: 122px; padding: 16px; }
+.skill-library-card .plugin-card-title { display: flex; flex-direction: column; }
+.skill-library-card .plugin-card-title :is(h2, p) { padding-right: 38px; }
+.skill-library-icon { display: grid; place-items: center; align-self: center; flex: 0 0 58px; width: 58px; height: 64px; border-radius: 12px; background: var(--sunk); color: var(--ink); }
+.skill-library-icon .ico { width: 26px; height: 26px; font-size: 26px; }
+.skill-library-card .plugin-card-foot { margin-top: auto; padding-top: 12px; color: var(--soft); font-size: calc(11px * var(--text-scale, 1)); }
+.skill-library-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-library-source { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin-left: auto; color: var(--soft); white-space: nowrap; }
+.skill-library-source .ico { font-size: 13px; }
+.skill-library-source.is-current .ico { color: var(--green); }
+.skill-library-source.is-error .ico { color: var(--red); }
+.skill-library-update { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.skill-library-update:hover { text-decoration: underline; text-underline-offset: 3px; }
+.skill-source-url { margin: 10px 0 0; color: var(--soft); font-size: calc(11px * var(--text-scale, 1)); overflow-wrap: anywhere; user-select: text; }
+#skillGithubDialog[aria-busy='true'] .plugin-dialog-head button, #skillGithubDialog[aria-busy='true'] #skillGithubCancel { opacity: .45; pointer-events: none; }
 .pet-library-status { position: absolute; right: 16px; bottom: 14px; }
 .pet-import-guide { justify-content: space-between; column-gap: 48px; margin-top: 20px; }
 .pet-import-guide p { flex: 1 1 auto; max-width: 660px; }
@@ -713,16 +731,49 @@ main {
   .appearance-preview-chat { padding: 15px; }
 }
 
-/* Workspace is a settings page: a single readable column. */
+/* Workspace shares the library pages' 940px reading canvas. Its sections stay
+   in one semantic column because approved folders have unbounded height; no
+   neighboring section should inherit layout movement from that variable list. */
 [data-panel='home'] {
-  display: none; overflow-y: auto; align-content: start; gap: 26px;
-  padding: 52px max(28px, calc((100% - 760px) / 2)) 64px;
+  display: none;
+  overflow-y: auto;
+  padding: 46px 36px 64px;
+  scrollbar-gutter: stable;
 }
 [data-panel='home'].is-active { display: block; }
-[data-panel='home'] .top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
-[data-panel='home'] .card { margin-bottom: 28px; min-height: 0; overflow: visible; }
-[data-panel='home'] .scroll { overflow: visible; }
-[data-panel='home'] #homeFeed { max-height: 220px; overflow: auto; }
+.workspace-content { width: 100%; max-width: 940px; margin-inline: auto; }
+.workspace-page-head { display: grid; align-items: initial; gap: 0; min-height: 0; margin-bottom: 30px; padding: 0; border: 0; }
+.workspace-page-head h1 { margin: 0; font-size: calc(30px * var(--text-scale, 1)); font-weight: 650; letter-spacing: -.8px; line-height: 1.2; }
+.workspace-page-head p { max-width: 68ch; margin: 9px 0 0; color: var(--soft); font-size: calc(14px * var(--text-scale, 1)); line-height: 1.6; }
+.workspace-layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 28px; }
+.workspace-column { display: contents; }
+.workspace-section { grid-column: 1; min-width: 0; }
+.workspace-permissions { grid-row: 1; }
+#foldersCard { grid-row: 2; }
+.workspace-health { grid-row: 3; }
+.workspace-activity { grid-row: 4; }
+.workspace-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; min-height: 48px; margin-bottom: 12px; padding: 0; border: 0; }
+.workspace-section-head > div { min-width: 0; }
+.workspace-section-head h2 { margin: 0; color: var(--ink); font-size: calc(16px * var(--text-scale, 1)); font-weight: 650; letter-spacing: -.15px; line-height: 1.35; }
+.workspace-section-head p { margin: 3px 0 0; color: var(--soft); font-size: calc(12px * var(--text-scale, 1)); line-height: 1.45; }
+.workspace-section-head > .btn, .workspace-section-actions { flex: 0 0 auto; }
+.workspace-section-head .btn { min-height: 34px; padding: 7px 9px; color: var(--ink); font-size: calc(11.5px * var(--text-scale, 1)); }
+.workspace-section-actions { display: flex; align-items: center; gap: 4px; }
+.workspace-surface { min-width: 0; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
+.workspace-section.drop-target .workspace-surface { outline: 2px dashed var(--soft); outline-offset: -6px; background: var(--hover); }
+.workspace-activity #homeFeed { max-height: 248px; overflow: auto; }
+.workspace-section#foldersCard .root b { flex: 0 1 42%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-section#foldersCard .root span { max-width: 40%; }
+.workspace-section :is(button, input):focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+@media (max-width: 1100px) {
+  [data-panel='home'] { padding: 36px 24px 52px; }
+}
+@media (max-width: 520px) {
+  [data-panel='home'] { padding: 24px 18px 40px; }
+  .workspace-page-head { margin-bottom: 24px; }
+  .workspace-page-head h1 { font-size: calc(27px * var(--text-scale, 1)); }
+  .workspace-section-head { align-items: flex-start; min-height: 0; }
+}
 
 [data-panel='activity'] {
   padding: 12px 14px 14px;
@@ -1979,21 +2030,27 @@ input[readonly] {
 #chatBody { padding: 24px max(24px, calc((100% - 800px) / 2)); scrollbar-gutter: stable; }
 /* Keyed reconciliation owns the reader anchor; avoid a second browser adjustment. */
 #chatBody { overflow-anchor: none; }
-#timelineEmpty { min-height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 24px; padding: 30px 12px 10vh; text-align: center; font-size: clamp(22px, 2.6vw, 29px); font-weight: 450; letter-spacing: -.035em; color: var(--ink); }
+#timelineEmpty { min-height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 24px; padding: 30px 12px clamp(110px, 18vh, 190px); text-align: center; font-size: clamp(22px, 2.6vw, 29px); font-weight: 450; letter-spacing: -.035em; color: var(--ink); }
 .welcome-mark { width: 42px; height: 42px; color: var(--faint); stroke-width: 1.3; }
 #chatBody > [data-view='timeline']:has(#timelineEmpty:not([hidden])) { height: 100%; }
+/* The empty welcome belongs to the whole composition viewport, not only the
+   residual timeline row. Spanning the body, dock and composer keeps its visual
+   anchor fixed while attachments, Skills or actions legitimately grow the
+   composer; those controls remain in the foreground of the shared area. */
+.card.is-session:has(#timelineEmpty:not([hidden])) > #chatBody { grid-column: 1; grid-row: 2 / 5; }
+.card.is-session:has(#timelineEmpty:not([hidden])) > :is(.composer-dock, #composer) { position: relative; z-index: 1; grid-column: 1; }
 .card.is-session:has(#timelineEmpty:not([hidden])) > h2, .card.is-session:has(#timelineEmpty:not([hidden])) > .subhead { visibility: hidden; }
 .card.is-session:has(#timelineEmpty:not([hidden])) #chatFoot { visibility: hidden; }
 /* One hairline for the input and every row stacked above it. */
 .card.is-session { --composer-edge: color-mix(in srgb, var(--ink) 6%, var(--card)); }
 .card.is-session:has(> .composer:focus-within, > .composer-dock:focus-within) { --composer-edge: color-mix(in srgb, var(--ink) 8%, var(--card)); }
-.composer { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto 36px; align-items: center; gap: 8px; width: calc(100% - 48px); max-width: 860px; margin: 14px auto 24px; border: 1px solid var(--composer-edge); border-radius: 22px; background: var(--card); padding: 14px 12px 10px; box-shadow: 0 8px 28px rgb(0 0 0 / 10%); }
+.composer { position: relative; display: grid; grid-template-columns: 36px auto minmax(0, 1fr) minmax(0, 164px) 36px; align-items: center; gap: 8px; width: calc(100% - 48px); max-width: 860px; margin: 14px auto 24px; border: 1px solid var(--composer-edge); border-radius: 22px; background: var(--card); padding: 14px 12px 10px; box-shadow: 0 8px 28px rgb(0 0 0 / 10%); }
 /* Skills library and selection design adapted from igorbelchior86's #260. */
 .composer-selected-skills { grid-column: 1 / -1; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px 8px; min-width: 0; }
 .composer-selected-skills[hidden] { display: none; }
-.composer-selected-skill { display: inline-flex; flex: 0 1 auto; max-width: min(280px, 100%); min-width: 0; min-height: 28px; align-items: center; gap: 6px; padding: 3px 7px 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--sunk); color: color-mix(in srgb, var(--ink) 82%, #8f9cff 18%); }
-.composer-selected-skill:hover { border-color: var(--edge); background: var(--hover); }
-.composer-selected-skill-icon { width: 15px; height: 15px; flex: none; }
+.composer-selected-skill { display: inline-flex; flex: 0 1 auto; max-width: min(280px, 100%); min-width: 0; min-height: 30px; align-items: center; gap: 6px; padding: 4px 6px 4px 9px; border: 1px solid var(--accent-edge); border-radius: 999px; background: var(--accent-wash); color: var(--ink); }
+.composer-selected-skill:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--edge)); background: color-mix(in srgb, var(--accent) 14%, var(--card)); }
+.composer-selected-skill-icon { width: 15px; height: 15px; flex: none; color: var(--accent); }
 .composer-selected-skill-title { min-width: 0; overflow: hidden; font-size: calc(12px * var(--text-scale, 1)); font-weight: 500; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .composer-selected-skill-remove { display: grid; place-items: center; flex: none; width: 20px; height: 20px; padding: 4px; border: 0; border-radius: 50%; background: transparent; color: var(--soft); cursor: pointer; }
 .composer-selected-skill-remove:hover { background: var(--hover); color: var(--ink); }
@@ -2007,6 +2064,7 @@ input[readonly] {
 .slash-menu-copy strong { flex: none; max-width: 42%; overflow: hidden; font-size: calc(13px * var(--text-scale, 1)); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .slash-menu-copy small, .slash-menu-meta { overflow: hidden; color: var(--faint); font-size: calc(12px * var(--text-scale, 1)); text-overflow: ellipsis; white-space: nowrap; }
 .slash-menu-meta { flex: none; max-width: 24%; }
+.slash-menu-empty { margin: 0; padding: 12px 10px; color: var(--soft); font-size: calc(12px * var(--text-scale, 1)); line-height: 1.45; }
 
 @media (max-width: 520px) {
   .skill-row { flex-wrap: wrap; }
@@ -2018,17 +2076,18 @@ input[readonly] {
 .composer textarea { grid-column: 1 / -1; grid-row: 1; width: 100%; field-sizing: content; min-height: 24px; max-height: 220px; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: calc(15px * var(--text-scale, 1)); line-height: 1.6; padding: 0 2px 14px; }
 .composer-toolbar { display: contents; }
 .composer #attachmentMenu { grid-column: 1; grid-row: 2; }
-.composer .composer-options { grid-column: 3; grid-row: 2; }
+.composer .composer-options { grid-column: 2; grid-row: 2; }
 .composer #modelMenu { grid-column: 4; grid-row: 2; }
+.composer #generateFinishGoal { grid-column: 3; grid-row: 2; justify-self: start; }
 .composer .send-control { grid-column: 5; grid-row: 2; }
 .composer:has(.composer-selected-skills:not([hidden])) textarea { grid-row: 2; }
-.composer:has(.composer-selected-skills:not([hidden])) :is(#attachmentMenu, .composer-options, #modelMenu, .send-control) { grid-row: 3; }
+.composer:has(.composer-selected-skills:not([hidden])) :is(#attachmentMenu, .composer-options, #modelMenu, #generateFinishGoal, .send-control) { grid-row: 3; }
 .composer #composerImages, .composer #composerStatus { grid-column: 1 / -1; }
 .composer:has(#composerImages:not([hidden])) textarea { grid-row: 2; }
-.composer:has(#composerImages:not([hidden])) #attachmentMenu, .composer:has(#composerImages:not([hidden])) .composer-options, .composer:has(#composerImages:not([hidden])) #modelMenu, .composer:has(#composerImages:not([hidden])) .send-control { grid-row: 3; }
+.composer:has(#composerImages:not([hidden])) :is(#attachmentMenu, .composer-options, #modelMenu, #generateFinishGoal, .send-control) { grid-row: 3; }
 .send-button { display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; width: 36px; height: 36px; background: var(--accent-fill, var(--ink)); color: var(--on-accent, var(--page)); cursor: pointer; }
 .send-button > .ph { font-size: 20px; line-height: 1; }
-.send-button:disabled { opacity: .4; cursor: default; }
+.send-button:disabled { background: var(--hover); color: var(--soft); cursor: default; }
 #composerStatus:empty { display: none; }
 #composerStatus { padding-top: 8px; font-size: calc(12px * var(--text-scale, 1)); color: var(--soft); }
 .settings-heading { padding: 12px 0 32px; }
@@ -2882,7 +2941,7 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
   white-space: nowrap;
 }
 
-.composer-options { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; }
+.composer-options { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; }
 .composer-options select { border: 0; background: transparent; color: var(--soft); font: inherit; font-size: calc(11px * var(--text-scale, 1)); max-width: 130px; padding: 5px; }
 .input-queue { display: flex; flex-direction: column; width: 100%; margin: 0 auto; }
 .pending-message { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin: 4px 0 26px auto; width: fit-content; max-width: 82%; text-align: start; }
@@ -3018,8 +3077,8 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .composer-menu { position: relative; flex-shrink: 0; }
 .composer-menu > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; border-radius: 8px; padding: 7px 8px; color: var(--soft); font-size: calc(12px * var(--text-scale, 1)); }
 .composer-menu > summary::-webkit-details-marker { display: none; }
-#attachmentMenu > summary { width: 32px; height: 36px; padding: 0; justify-content: center; }
-#attachmentMenu > summary .ico { display: block; width: 20px; height: 20px; }
+#attachmentMenu > summary { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; }
+#attachmentMenu > summary .ico { width: 20px; height: 20px; font-size: 20px; }
 .composer-menu > summary:hover, .composer-menu[open] > summary { color: var(--ink); background: var(--hover); }
 .composer-popover { position: absolute; z-index: 30; bottom: calc(100% + 12px); left: 0; width: 224px; padding: 7px; background: var(--card); border: 1px solid var(--edge); border-radius: 14px; box-shadow: 0 8px 30px #0005; }
 .model-menu .composer-popover { left: 50%; right: auto; translate: -50% 0; width: 260px; }
@@ -3031,7 +3090,6 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .composer-popover button:hover { background: var(--hover); }
 .composer-popover label { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px; color: var(--soft); font-size: calc(12px * var(--text-scale, 1)); }
 .composer-popover select { width: 145px; color: var(--ink); background: var(--sunk); border: 1px solid var(--edge); padding: 6px; border-radius: 7px; }
-.composer-toolbar { gap: 6px; }
 @media (max-width: 760px) { .model-menu { width: 120px; flex-basis: 120px; } }
 
 html[data-theme="dark"] { color-scheme: dark; }
@@ -3064,8 +3122,11 @@ select option:disabled { color: var(--soft); opacity: .55; }
 select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink); }
 
 .session-controls-menu { padding: 8px 0 0; margin-top: 8px; border-top: 1px solid var(--line); }
-#composerSettings > summary { width: 36px; height: 36px; padding: 8px; justify-content: center; }
-#composerSettings > summary .ico { width: 20px; height: 20px; }
+#composerSettings > summary { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; }
+#composerSettings > summary .ico { width: 20px; height: 20px; font-size: 20px; }
+#composerSettings > summary[data-mode-active] { display: flex; width: auto; max-width: 154px; gap: 6px; padding-inline: 9px 10px; background: color-mix(in srgb, var(--accent) 14%, var(--card)); color: var(--ink); }
+#composerModeLabel { min-width: 0; overflow: hidden; font-size: calc(12px * var(--text-scale, 1)); font-weight: 560; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+#composerModeLabel[hidden] { display: none; }
 #composerSettings .composer-popover { width: 280px; left: 50%; right: auto; translate: -50% 0; transform-origin: bottom center; max-height: min(520px, 70vh); overflow-y: auto; }
 #composerSettings #loopDeliveryRow { flex-direction: column; align-items: stretch; gap: 7px; padding: 12px 9px 6px; }
 #loopDeliveryRow select { width: 100%; max-width: 100%; padding: 9px 11px; border-radius: 9px; line-height: 1.4; }
@@ -3405,8 +3466,8 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 #goalLifecycle .queue-label { white-space: normal; }
 .goal-live-preview { max-height: 120px; overflow: auto; white-space: pre-wrap; margin: 6px 0 0; font: inherit; color: var(--soft); }
 
-.context-meter { position: relative; flex: 0 0 28px; }
-#contextMeterButton { display: grid; place-items: center; width: 28px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--soft); cursor: pointer; }
+.context-meter { position: relative; flex: 0 0 36px; }
+#contextMeterButton { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--soft); cursor: pointer; }
 #contextMeterButton:hover { background: var(--hover); }
 #contextMeterButton svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; transform: rotate(-90deg); }
 .context-track { opacity: .35; }
@@ -3425,9 +3486,9 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 .slash-menu-section-title { padding: 6px 8px; color: var(--soft); font-size: 11px; }
 .slash-menu-section-title:not(:first-child) { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
 
-.composer-skills-row { display: flex; align-items: center; }
-.composer-skills-row > #composerSkills { flex: 1; }
-.composer-skills-row > #composerAddSkill { width: 30px; height: 30px; padding: 7px; flex: none; justify-content: center; color: var(--soft); }
+.composer-skills-row { display: flex; align-items: center; gap: 4px; }
+.composer-skills-row > #composerSkills { flex: 1; min-height: 36px; padding-block: 8px; }
+.composer-skills-row > #composerAddSkill { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; flex: none; color: var(--soft); }
 .composer-skills-row > #composerAddSkill .ico { width: 15px; height: 15px; }
 
 .app.has-terminal { grid-template-rows: env(titlebar-area-height, 28px) auto auto minmax(0, 1fr) var(--terminal-height, 250px); }

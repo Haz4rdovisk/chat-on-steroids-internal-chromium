@@ -9,7 +9,7 @@ import type { UsageOverview } from '../shared/usage.js';
 import type { InputArgs, InputEntry } from '../main/session/input.js';
 import type { LocalProject } from '../shared/projects.js';
 import type { ProjectDirectoryListing, ProjectFileMutationResult, ProjectFilePreview, ProjectFileSaveResult, ProjectFilesChanged } from '../shared/project-files.js';
-import type { SkillSummary, SkillLibrary, SkillsDraftScope } from '../shared/skills.js';
+import type { SkillSummary, ManagedSkill, GitHubSkillUpdateCheck, SkillLibrary, SkillsDraftScope } from '../shared/skills.js';
 import type { PluginSnapshot, PluginInstallRequest, PluginConfigPatch } from '../shared/plugins.js';
 import type { PetLibraryState, PetOverlayControlState, PetRuntimeAsset } from '../shared/pets.js';
 /**
@@ -130,6 +130,12 @@ const api = {
   },
   chooseFiles: () => call<InputAttachment[]>('sessions:files'),
   listSkills: () => call<SkillSummary[]>('skills:list'),
+  listManagedSkills: () => call<ManagedSkill[]>('skills:managed'),
+  skillsImport: (kind: 'folder' | 'file') => call<ManagedSkill[] | null>('skills:import', { kind }),
+  skillsImportGithub: (url: string) => call<ManagedSkill[]>('skills:githubImport', { url }),
+  skillsCheckGithub: (id: string) => call<GitHubSkillUpdateCheck[]>('skills:githubCheck', { id }),
+  skillsUpdateGithub: (id: string) => call<{ status: 'current' | 'updated'; skills: ManagedSkill[]; warning?: string }>('skills:githubUpdate', { id }),
+  skillsRemove: (id: string) => call<ManagedSkill[]>('skills:remove', { id }),
   skillLibrary: (scope: SkillsDraftScope) => call<SkillLibrary>('skills:library', scope),
   dropFiles: async (files: File[]): Promise<Reply<InputAttachment[]>> => {
     if (!files.length || files.length > 20) return { ok: false, error: 'Attach up to 20 files per message' };
