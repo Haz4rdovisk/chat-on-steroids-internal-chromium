@@ -66,6 +66,19 @@ app.whenReady().then(async () => {
       const opened = openedGeometry[key];
       assert.ok(opened >= minimum, `${action} did not open: ${JSON.stringify({ enteringGeometry, openedGeometry })}`);
       assert.ok(entering > 1 && entering < opened - 1, `${action} did not interpolate open: ${JSON.stringify({ entering, opened })}`);
+      if (action === 'sidebar') {
+        const exposure = await js(`(() => {
+          const sidebar = document.querySelector('.sidebar');
+          return {
+            clipPath: getComputedStyle(sidebar).clipPath,
+            cornerWidth: parseFloat(getComputedStyle(sidebar, '::before').width)
+          };
+        })()`);
+        assert.ok(Math.abs(exposure.cornerWidth - 18) < 0.1, `unexpected workspace corner width: ${exposure.cornerWidth}`);
+        const rightClip = Number(exposure.clipPath.split(' ')[1]?.replace('px', ''));
+        assert.ok(Number.isFinite(rightClip) && rightClip <= -(exposure.cornerWidth + 1),
+          `the expanded sidebar clipped its rounded workspace corner: ${JSON.stringify(exposure)}`);
+      }
       await js(`window.motion.${action}(false)`);
       await wait(65);
       const exiting = (await measure())[key];
@@ -73,6 +86,13 @@ app.whenReady().then(async () => {
       const closed = (await measure())[key];
       assert.ok(closed < 2, `${action} did not close: ${JSON.stringify({ exiting, closed })}`);
       assert.ok(exiting > closed + 1 && exiting < opened - 1, `${action} did not interpolate closed: ${JSON.stringify({ exiting, closed })}`);
+      if (action === 'sidebar') {
+        const closedSidebar = await js(`(() => {
+          const style = getComputedStyle(document.querySelector('.sidebar'));
+          return { visibility: style.visibility, pointerEvents: style.pointerEvents };
+        })()`);
+        assert.deepEqual(closedSidebar, { visibility: 'hidden', pointerEvents: 'none' });
+      }
     }
     await js('window.motion.sidebar(true);window.motion.files(true);window.motion.terminal(true)');
     await wait(260);
