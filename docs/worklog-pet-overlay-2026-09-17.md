@@ -178,3 +178,14 @@ path, not those later evidence levels.
   performance check passed: idle measured 2.25 RAF/s, reduced motion and hidden
   measured 0 RAF/s, and no renderer console errors were reported. This is source
   and isolated-renderer evidence, not package or installed-payload evidence.
+- The broader focused boundary run passed 176/176 tests; renderer translations
+  passed 15/15; production build and notices passed. The full non-shutdown suite
+  passed 5,307 tests with 44 skipped except for one Windows PowerShell pipeline
+  test that exceeded its 30-second timeout under full parallel load. Its exact
+  isolated rerun passed in 1.44 seconds; the separately gated shutdown suite
+  passed 6/6. No Pets, icon, connection, or renderer test failed in the final run.
+- The built overlay smoke passed twice with isolated userData. It measured the
+  CSS body at exactly 160×160, the visible sprite at 74×113 physical pixels,
+  dragged to and persisted `(333,444)`, retained that position after a full
+  Electron restart, kept the overlay visible while its owner was minimized, and
+  restored the owner on a short click without changing its Settings screen.
