@@ -229,10 +229,34 @@ describe('the chat the extension creates beside its source', () => {
       set: async (value: object) => { Object.assign(saved, value); },
       remove: async () => {}
     });
-    const makeTab = async (options: Created) => {
-      const tab = { ...options, id: 100 + created.length };
+    const makeTab = async (options: Partial<Created>) => {
+      const tab: Created = { ...options, id: 100 + created.length };
       created.push(tab);
+      tabs.push(tab);
       return tab;
+    };
+    const browserHost = async (request: { action?: string; tabId?: number; create?: Partial<Created>; update?: Partial<Created> }) => {
+      if (request.action === 'query') return { tabs: [...tabs] };
+      if (request.action === 'get') {
+        const tab = tabs.find(entry => entry.id === request.tabId);
+        if (!tab) throw new Error('no such tab');
+        return { tab };
+      }
+      if (request.action === 'create') return { tab: await makeTab(request.create || {}) };
+      if (request.action === 'update') {
+        const tab = tabs.find(entry => entry.id === request.tabId);
+        if (!tab) throw new Error('no such tab');
+        Object.assign(tab, request.update);
+        return { tab };
+      }
+      if (request.action === 'remove') {
+        const index = tabs.findIndex(entry => entry.id === request.tabId);
+        if (index >= 0) tabs.splice(index, 1);
+        return {};
+      }
+      if (request.action === 'reload') return {};
+      if (request.action === 'events') return { generation: 'fixture', after: 0, events: [] };
+      throw new Error(`unsupported browser host action: ${String(request.action)}`);
     };
     const context = vm.createContext({
       chrome: {
@@ -260,7 +284,16 @@ describe('the chat the extension creates beside its source', () => {
         alarms: { onAlarm: event, create: () => {}, clear: async () => true },
         scripting: { executeScript: async () => [], insertCSS: async () => {} }
       },
-      fetch: async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) }),
+      fetch: async (input: unknown, init?: { body?: string }) => {
+        if (String(input).endsWith('/hello')) {
+          return { ok: true, status: 200, json: async () => ({ app: 'chat-on-steroids', paired: true, compatible: true, version: '2.1.14', bridge: 14 }) };
+        }
+        if (String(input).includes('/browser-host')) {
+          const data = await browserHost(JSON.parse(init?.body || '{}'));
+          return { ok: true, status: 200, json: async () => data };
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      },
       URL, URLSearchParams, AbortController, setTimeout, clearTimeout, TextEncoder, console,
       browserDriverModule: { installBrowserDriverLifecycle() {}, sweepStaleDrivenGroups: async () => {} }
     });

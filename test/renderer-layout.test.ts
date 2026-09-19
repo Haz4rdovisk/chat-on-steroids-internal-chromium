@@ -580,10 +580,11 @@ describe('the window as a whole', () => {
   });
 
   it('never scrolls sideways', () => {
-    // Authored tables/code and dense Usage data may scroll locally; the
-    // surrounding app must not.
+    // Authored tables/code, browser tabs and dense Usage data may scroll locally;
+    // the surrounding app must not.
     const horizontal = [...css.matchAll(/([^{}]+)\{[^{}]*overflow-x:\s*(?:auto|scroll)[^{}]*\}/g)];
     expect(horizontal.map(match => match[1]!.trim())).toEqual([
+      '.browser-dock-tabs',
       '.msg.rich .markdown-table',
       '.usage-heatmap-surface',
       '.usage-table-stack',

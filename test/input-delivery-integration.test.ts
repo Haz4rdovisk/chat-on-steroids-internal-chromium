@@ -29,6 +29,16 @@ vi.mock('../src/main/connection.js', async (importOriginal) => {
   return { ...actual, connect: async () => {}, getStatus: () => ({ ...actual.getStatus(), state: 'connected' }) };
 });
 vi.mock('../src/main/browser.js', () => ({ openInPreferredBrowser: async () => 'chrome.exe', isPreferredBrowserRunning: async () => null }));
+vi.mock('../src/main/internal-browser.js', () => ({
+  ensureInternalBrowserReady: async () => {},
+  openInternalBrowserUrl: async () => ({ open: true, activeTabId: 1, tabs: [] }),
+  closeInternalBrowserTab: async () => ({ open: false, activeTabId: null, tabs: [] }),
+  hideInternalBrowserDock: async () => ({ open: false, activeTabId: null, tabs: [] }),
+  internalBrowserDockState: () => ({ open: false, activeTabId: null, tabs: [] }),
+  layoutInternalBrowserDock: async () => ({ open: false, activeTabId: null, tabs: [] }),
+  selectInternalBrowserTab: async () => ({ open: false, activeTabId: null, tabs: [] }),
+  showInternalBrowserDock: async () => ({ open: true, activeTabId: 1, tabs: [] })
+}));
 const { defaultConfig, initConfigPath, saveConfig } = await import('../src/main/config.js');
 const { initSecretsPath } = await import('../src/main/secrets.js');
 const { initDurableStore, flushDurable, resetDurableForTests, writeDurableNow } = await import('../src/main/durable.js');

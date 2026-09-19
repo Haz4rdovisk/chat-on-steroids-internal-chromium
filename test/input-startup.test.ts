@@ -4,7 +4,7 @@ const ports = vi.hoisted(() => ({ backgroundChats: false, running: false as bool
   browser: { connected: false, present: false, lastSeenAt: null as number | null }, open: vi.fn(), bridge: vi.fn(), enqueue: vi.fn(), cancel: vi.fn(), note: vi.fn(), rows: [] as InputEntry[], listeners: new Set<() => void>() }));
 vi.mock('../src/main/connection.js', () => ({ connect: ports.connect, getStatus: () => ports.status, onStatusChange: (fn: () => void) => { ports.listeners.add(fn); return () => ports.listeners.delete(fn); } }));
 vi.mock('../src/main/bridge.js', () => ({ bridgeStatus: async () => ports.browser, browserWakeConnected: () => ports.browser.connected, startBridge: ports.bridge }));
-vi.mock('../src/main/browser.js', () => ({ openInPreferredBrowser: ports.open, isPreferredBrowserRunning: async () => ports.running }));
+vi.mock('../src/main/browser-startup.js', () => ({ wakeBrowserUrl: ports.open, resetBrowserStartupForTests: vi.fn() }));
 vi.mock('../src/main/config.js', () => ({ getConfig: () => ({ ui: { backgroundChats: ports.backgroundChats } }) }));
 vi.mock('../src/main/session/input.js', () => ({ enqueueInput: ports.enqueue, cancelInput: ports.cancel, noteInputStartupError: ports.note, listInputs: async () => ports.rows }));
 import { sendDesktopInput, cancelDesktopInput, retryQueuedInputBrowser, resetInputStartupForTests, stopInputStartup } from '../src/main/session/start-input.js';
@@ -53,7 +53,7 @@ it('retries only the failed browser wake for the same queued UUID', async () => 
   ports.rows[0]!.state = 'browser'; ports.rows[0]!.error = 'Message queued. Browser startup failed: old';
   expect(await retryQueuedInputBrowser(request.id)).toBeNull();
 });
-it('publishes before connection startup and opens exactly one marked bootstrap while Chrome starts', async () => {
+it('publishes before connection startup and opens exactly one marked bootstrap while internal Chromium starts', async () => {
   let release!: () => void;
   ports.open.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve('chrome.exe'); }));
   const first = sendDesktopInput(request);
@@ -74,7 +74,7 @@ it('preserves setup failures on the accepted queue without opening a browser', a
 it('keeps a failed browser launch queued and opens existing targets by exact identity', async () => {
   ports.open.mockRejectedValueOnce(new Error('Chrome refused startup'));
   expect(await sendDesktopInput({ ...request, sessionId: 'session-existing' })).toMatchObject({ state: 'queued' });
-  await vi.waitFor(() => expect(ports.open).toHaveBeenCalledWith('https://chatgpt.com/c/exact-conversation'));
+  await vi.waitFor(() => expect(ports.open).toHaveBeenCalledWith('https://chatgpt.com/c/exact-conversation', false, false));
   await vi.waitFor(() => expect(ports.note).toHaveBeenCalled());
   expect(ports.note).toHaveBeenCalledWith(request.id, expect.stringContaining('Message queued. Browser startup failed'));
   ports.browser = { connected: true, present: true, lastSeenAt: 10 };
@@ -83,7 +83,7 @@ it('keeps a failed browser launch queued and opens existing targets by exact ide
   await sendDesktopInput(request); await vi.waitFor(() => expect(ports.open).toHaveBeenCalledTimes(2));
 });
 
-it('cancels accepted input while waiting for connection without opening Chrome', async () => {
+it('cancels accepted input while waiting for connection without opening internal Chromium', async () => {
   ports.status = { state: 'connecting-tunnel', detail: '' };
   expect(await sendDesktopInput(request)).toMatchObject({ state: 'queued' });
   await vi.waitFor(() => expect(ports.listeners.size).toBe(1));
@@ -93,11 +93,11 @@ it('cancels accepted input while waiting for connection without opening Chrome',
   ports.status = { state: 'connected', detail: '' }; for (const listener of ports.listeners) listener();
   expect(ports.open).not.toHaveBeenCalled();
 });
-it('leaves delivery with the existing browser while its wake transport reconnects', async () => {
+it('hands delivery to the internal-browser wake owner while its transport reconnects', async () => {
   ports.running = true;
   ports.browser = { connected: false, present: true, lastSeenAt: Date.now() };
   await sendDesktopInput(request);
-  expect(ports.open).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(ports.open).toHaveBeenCalledTimes(1));
   await vi.waitFor(() => expect(ports.note).toHaveBeenCalled());
   expect(ports.rows[0]).toMatchObject({ state: 'queued', error: undefined });
 });
@@ -108,7 +108,7 @@ it('preserves background placement for a cold authored send and its explicit ret
   await vi.waitFor(() => expect(ports.rows[0]?.error).toContain('Browser startup failed'));
   await retryQueuedInputBrowser(request.id);
   expect(ports.open).toHaveBeenCalledTimes(2);
-  for (const call of ports.open.mock.calls) expect(call[1]).toEqual({ backgroundStartup: true });
+  for (const call of ports.open.mock.calls) expect(call.slice(1)).toEqual([expect.any(Boolean), true]);
   expect(ports.enqueue).toHaveBeenCalledTimes(1);
 });
 it('cancels an enqueue that commits after the user stopped startup', async () => {
@@ -123,10 +123,10 @@ it('cancels an enqueue that commits after the user stopped startup', async () =>
   expect(ports.open).not.toHaveBeenCalled();
 });
 
-it.each([true, null])('queues authored input without activating a running or unknown browser (%s)', async state => {
+it.each([true, null])('queues authored input through the internal-browser wake owner regardless of an obsolete process probe (%s)', async state => {
   ports.running = state;
   await sendDesktopInput(request);
-  expect(ports.open).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(ports.open).toHaveBeenCalledTimes(1));
   await vi.waitFor(() => expect(ports.note).toHaveBeenCalled());
   expect(ports.rows[0]).toMatchObject({ state: 'queued', error: undefined });
 });

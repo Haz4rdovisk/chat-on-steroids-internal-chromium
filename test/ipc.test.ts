@@ -22,6 +22,9 @@ const githubSkillIpcMocks = vi.hoisted(() => ({
   check: vi.fn(async (_id: string) => [{ id: 'review', originRevision: 'b'.repeat(64), state: 'available' as const, checkedAt: 1 }]),
   update: vi.fn(async (_id: string, _trash: (directory: string) => Promise<void>) => ({ status: 'current' as const, skills: [] }))
 }));
+const internalBrowserIpcMocks = vi.hoisted(() => ({
+  open: vi.fn(async () => ({ open: true, activeTabId: 1, tabs: [] }))
+}));
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -45,6 +48,7 @@ vi.mock('electron', () => ({
 // This suite owns IPC behavior, not Electron's packaged-vs-checkout path discovery.
 vi.mock('../src/main/extension-path.js', () => ({ extensionDir: () => process.cwd() }));
 vi.mock('../src/main/browser.js', () => ({ openInPreferredBrowser: vi.fn(async () => 'chrome.exe') }));
+vi.mock('../src/main/internal-browser.js', () => ({ openInternalBrowserUrl: internalBrowserIpcMocks.open }));
 vi.mock('../src/main/pet-library.js', () => ({
   deletePet: vi.fn(() => ({ pets: [] })),
   importPet: vi.fn(async () => ({ pets: [] })),
@@ -94,7 +98,6 @@ const {
 } = await import('../src/main/agents.js');
 const { registerIpc } = await import('../src/main/ipc.js');
 const { initSkillsPath, listSkills } = await import('../src/main/skills.js');
-const { openInPreferredBrowser } = await import('../src/main/browser.js');
 const { app, nativeTheme, safeStorage, shell, dialog } = await import('electron');
 const { extensionDownloadUrl } = await import('../src/main/version.js');
 const { resetWorkspaces, setWorkspaceFor, workspaceEntries } = await import('../src/main/workspace.js');
@@ -1308,15 +1311,16 @@ describe('session IPC contracts', () => {
     resetBlockedChatsForTests();
   });
 
-  it('opens only the stored conversation URL in Chrome', async () => {
+  it('opens only the stored conversation URL in the internal ChatGPT browser', async () => {
     const session = await createSession({
       title: 'open me',
       conversationId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
     });
     const reply = await handlers.get('sessions:openChat')!(null, { id: session.id }) as any;
     expect(reply.ok, reply.error).toBe(true);
-    expect(openInPreferredBrowser).toHaveBeenCalledWith(
-      'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    expect(internalBrowserIpcMocks.open).toHaveBeenCalledWith(
+      'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      { active: true, reveal: true, retain: true }
     );
 
     const unattributed = await createSession({ title: 'no conversation', conversationId: null });

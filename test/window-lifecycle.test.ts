@@ -21,6 +21,7 @@ describe('native window activation', () => {
     vm.runInNewContext(constructor, {
       BrowserWindow: function (value: Record<string, unknown>) { options = value; },
       layout: {}, icon: null, process: { platform },
+      attachInternalBrowserWindow: () => {}, attachViewMenuWindow: () => {},
       titleBarOverlayForTheme: () => ({}), windowBackgroundForTheme: () => '#181818', getConfig: () => ({ ui: { theme: 'dark' } }),
       UI_BASE_ZOOM: 1, path: { join: () => 'preload.js' }, __dirname: '/app'
     });
