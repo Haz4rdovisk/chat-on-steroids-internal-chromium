@@ -642,6 +642,7 @@ it('gives Files and Sub-agents the same horizontally resizable work-panel width'
 
   const fileHandle = host.querySelector<HTMLElement>('.file-panel .work-panel-resize')!;
   expect(fileHandle.getAttribute('role')).toBe('separator');
+  expect(host.style.getPropertyValue('--work-panel-width')).toBe('420px');
   fileHandle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
   const width = host.style.getPropertyValue('--work-panel-width');
   expect(width).toMatch(/^\d+px$/);
@@ -651,6 +652,17 @@ it('gives Files and Sub-agents the same horizontally resizable work-panel width'
   expect(agentHandle.getAttribute('aria-valuenow')).toBe(width.replace('px', ''));
   agentHandle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
   expect(host.style.getPropertyValue('--work-panel-width')).not.toBe(width);
+});
+
+it('stops horizontal resize before the Files toolbar can be swallowed', () => {
+  host.getBoundingClientRect = () => ({ width: 1000 } as DOMRect);
+  createFilePanel({ host, toggle, onAttach: () => undefined });
+  const handle = host.querySelector<HTMLElement>('.work-panel-resize')!;
+  handle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+  expect(host.style.getPropertyValue('--work-panel-width')).toBe('420px');
+  expect(handle.getAttribute('aria-valuemin')).toBe('420');
+  handle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  expect(host.style.getPropertyValue('--work-panel-width')).toBe('420px');
 });
 
 async function editFile(): Promise<HTMLTextAreaElement> {

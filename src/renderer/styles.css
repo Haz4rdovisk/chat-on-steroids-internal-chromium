@@ -2172,7 +2172,7 @@ input[readonly] {
 .composer:has(#composerImages:not([hidden])) textarea { grid-row: 2; }
 .composer:has(#composerImages:not([hidden])) :is(#attachmentMenu, .composer-options, #modelMenu, #generateFinishGoal, .send-control) { grid-row: 3; }
 .send-button { display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; width: 36px; height: 36px; background: var(--accent-fill, var(--ink)); color: var(--on-accent, var(--page)); cursor: pointer; }
-.send-button > .ph { font-size: 20px; line-height: 1; }
+.send-button > .send-icon { font-size: 20px; line-height: 1; }
 .send-button:disabled { background: var(--hover); color: var(--soft); cursor: default; }
 #composerStatus:empty { display: none; }
 #composerStatus { padding-top: 8px; font-size: calc(12px * var(--text-scale, 1)); color: var(--soft); }
@@ -3391,7 +3391,7 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
   display: grid; place-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9px;
   background: transparent; color: var(--soft);
 }
-#workspaceSettings:hover { background: transparent; color: var(--ink); }
+#workspaceSettings:hover { background: var(--hover); color: var(--ink); }
 #workspaceSettings.is-sel { background: var(--hover); color: var(--ink); }
 #workspaceSettings:focus-visible { outline: 1px solid var(--accent-edge); outline-offset: 1px; }
 #workspaceSettings .ico { width: 22px; height: 22px; font-size: 22px; }
@@ -3437,7 +3437,11 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 /* Right-side work panes. Files and Sub-agents are mutually exclusive projections of the
    current task. */
 [data-panel='chat'].has-agent-panel,
-[data-panel='chat'].has-file-panel { grid-template-columns: minmax(0, 1fr) var(--work-panel-width, minmax(340px, 42%)); }
+[data-panel='chat'].has-file-panel {
+  /* Keep both grid states as minmax tracks. A bare pixel width here makes Chromium
+     treat the open/closed grid change as discrete instead of interpolating it. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--work-panel-width, 42%));
+}
 .is-resizing-work-panel { transition: none; }
 .agent-panel { position: relative; grid-column: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: clip; border-left: 1px solid var(--line); background: var(--page); }
 .agent-panel-header { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
@@ -3485,9 +3489,11 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 .work-panel-resize { position: absolute; z-index: 8; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
 .work-panel-resize:hover, .work-panel-resize:focus-visible, .is-resizing-work-panel .work-panel-resize { background: linear-gradient(var(--accent-edge), var(--accent-edge)) center / 1px 100% no-repeat; outline: none; }
 .is-resizing-work-panel, .is-resizing-work-panel * { cursor: col-resize !important; user-select: none !important; }
-.file-panel-refresh { margin-left: auto; width: 30px; height: 30px; padding: 6px; }
-.file-panel-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-height: 42px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.file-panel-refresh { flex: 0 0 30px; width: 30px; height: 30px; padding: 6px; }
+.file-panel-toolbar { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; min-height: 42px; overflow-x: auto; overflow-y: hidden; padding: 6px 10px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.file-panel-toolbar::-webkit-scrollbar { display: none; }
 .file-panel-action { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 6px 7px; color: var(--soft); font-size: calc(10.5px * var(--text-scale, 1)); white-space: nowrap; }
+.file-panel-toolbar .file-panel-action { flex: 0 0 auto; }
 .file-panel-action:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
 .file-panel-action:disabled { opacity: .35; cursor: default; }
 .file-panel-action .ico { width: 13px; height: 13px; }

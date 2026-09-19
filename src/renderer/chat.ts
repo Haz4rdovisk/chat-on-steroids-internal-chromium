@@ -940,6 +940,8 @@ function paintDeliveryControls(): void {
   ui(send, 'title', () => stop && !working && pending ? t("Cancel delivery") : compactMode && !stop ? t("Compact & resume") : preparedPlan && !stop ? planAction : planMode && !stop ? t("Click to generate plan") : '');
   send.classList.toggle('is-stop', stop);
   const sendIcon = send.querySelector<HTMLElement>('.send-icon')!;
+  sendIcon.classList.toggle('ph', !stop);
+  sendIcon.classList.toggle('ph-fill', stop);
   sendIcon.classList.toggle('ph-arrow-up', !stop);
   sendIcon.classList.toggle('ph-stop', stop);
   for (const button of $('sendOptions').querySelectorAll<HTMLElement>('[data-delivery]')) {
