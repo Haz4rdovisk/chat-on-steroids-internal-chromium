@@ -15,7 +15,7 @@ export function createWorkspaceTerminal() {
   const toggle = el('button', 'btn btn-icon') as HTMLButtonElement;
   toggle.id = 'terminalToggle'; toggle.type = 'button'; toggle.append(icon('i-terminal'));
   ui(toggle, 'title', () => t('Toggle terminal (Ctrl+`)')); ui(toggle, 'aria-label', () => t('Toggle terminal'));
-  document.getElementById('headerConnect')!.after(toggle);
+  document.getElementById('headerActions')!.prepend(toggle);
   const panel = el('section', 'workspace-terminal'); panel.id = 'workspaceTerminal'; panel.hidden = true;
   ui(panel, 'aria-label', () => t('Terminal'));
   const resize = el('div', 'terminal-resize'); resize.tabIndex = 0; resize.setAttribute('role', 'separator');

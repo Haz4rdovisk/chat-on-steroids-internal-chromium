@@ -22,6 +22,8 @@ the timing and frame authority; imported pets never inherit Tur Tur's timings.
 - A click pokes a pet and restores/focuses CoS without changing the current screen.
   Dragging moves the pet without raising CoS and persists its overlay position.
 - Context actions retain OpenAI → ClosedAI and Anthropic → trash choreography.
+  Hide pet temporarily dismisses only the selected pet; its library Active state
+  remains unchanged. Turning View > Desktop pets on restores all active pets.
 - The favorite enabled pet anchors the compact task badge and bounded task tray.
   Task transitions trigger spawn/look/angry/celebrate without replacing ordinary
   idle, walk, poke, drag, carry, throw, and autonomous behavior.

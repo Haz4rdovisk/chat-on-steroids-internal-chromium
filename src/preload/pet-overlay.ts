@@ -7,6 +7,7 @@ const call = <T>(channel: string, payload?: unknown): Promise<Reply<T>> => ipcRe
 const api = {
   listPets: () => call<PetLibraryState>('pets:list'),
   petAsset: (id: string) => call<PetRuntimeAsset>('pets:asset', { id, preview: false }),
+  hidePet: (id: string): void => ipcRenderer.send('pet-overlay:hidePet', id),
   setInteractive: (interactive: boolean): void => ipcRenderer.send('pet-overlay:interactive', interactive === true),
   focusOwner: (): void => ipcRenderer.send('pet-overlay:focusOwner'),
   openLibrary: (): void => ipcRenderer.send('pet-overlay:openLibrary'),

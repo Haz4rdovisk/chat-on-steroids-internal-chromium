@@ -89,7 +89,7 @@ import {
 import { trayGuidArgsForPlatform, trayImageSpec } from './tray-image.js';
 import { browserWindowIconPath } from './window-icon.js';
 import { editContextMenuTemplate } from './edit-context-menu.js';
-import { attachViewMenuWindow, shutdownViewMenu } from './view-menu.js';
+import { attachViewMenuWindow, prewarmViewMenu, shutdownViewMenu } from './view-menu.js';
 
 /** Durable state file holding the multi-agent run. Hashes only, never credentials. */
 const SWARM_STATE = 'swarm';
@@ -165,7 +165,12 @@ function createWindow(): void {
 
   // A renderer that fails to load leaves a blank window with no other clue, so
   // record it where the diagnostics panel can show it.
-  window.webContents.on('did-finish-load', () => logInfo('window loaded'));
+  window.webContents.on('did-finish-load', () => {
+    logInfo('window loaded');
+    void prewarmViewMenu().catch(error =>
+      logWarn(`view menu prewarm: ${error instanceof Error ? error.message : String(error)}`)
+    );
+  });
   window.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.key !== 'F11' || input.isAutoRepeat) return;
     event.preventDefault();

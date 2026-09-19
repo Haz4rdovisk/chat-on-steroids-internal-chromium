@@ -19,7 +19,7 @@ const COMMANDS = new Set<ViewMenuCommand>(['browser', 'pet', 'sidebar', 'zoom-in
 
 let owner: BrowserWindow | null = null;
 let menuView: WebContentsView | null = null;
-let loadPromise: Promise<void> | null = null;
+let readyPromise: Promise<void> | null = null;
 let open = false;
 let ipcRegistered = false;
 let blurCloseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -137,8 +137,10 @@ function registerMenuIpc(): void {
 
 async function ensureMenuView(): Promise<WebContentsView> {
   if (menuView && !menuView.webContents.isDestroyed()) {
-    if (loadPromise) await loadPromise;
-    return menuView;
+    const view = menuView;
+    if (readyPromise) await readyPromise;
+    if (menuView !== view || view.webContents.isDestroyed()) throw new Error('The View menu was replaced while loading.');
+    return view;
   }
 
   const view = new WebContentsView({
@@ -160,27 +162,40 @@ async function ensureMenuView(): Promise<WebContentsView> {
   view.webContents.once('destroyed', () => {
     if (menuView !== view) return;
     menuView = null;
-    loadPromise = null;
+    readyPromise = null;
     open = false;
     announceOpen(false);
   });
 
-  loadPromise = (async () => {
+  readyPromise = (async () => {
     if (process.env.ELECTRON_RENDERER_URL) {
       const base = process.env.ELECTRON_RENDERER_URL.endsWith('/') ? process.env.ELECTRON_RENDERER_URL : `${process.env.ELECTRON_RENDERER_URL}/`;
       await view.webContents.loadURL(new URL('view-menu.html', base).toString());
     } else {
       await view.webContents.loadFile(path.join(__dirname, '../renderer/view-menu.html'));
     }
+    // Font readiness is safe while the view is hidden. Animation frames are not: Chromium can
+    // park requestAnimationFrame for a detached, invisible WebContentsView, which would leave
+    // every toggle waiting on prewarm forever.
+    await view.webContents.executeJavaScript('document.fonts.ready');
   })();
-  await loadPromise;
-  // Fonts are part of the menu's visual contract. Wait for Phosphor to load and for two
-  // compositor frames before the native view becomes visible; otherwise the first capture can
-  // paint labels while the icon glyph layer is still empty.
-  await view.webContents.executeJavaScript(
-    'document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))'
-  );
-  return view;
+  try {
+    await readyPromise;
+    if (menuView !== view || view.webContents.isDestroyed()) throw new Error('The View menu was replaced while loading.');
+    return view;
+  } catch (error) {
+    if (menuView === view) {
+      menuView = null;
+      readyPromise = null;
+    }
+    if (!view.webContents.isDestroyed()) view.webContents.close();
+    throw error;
+  }
+}
+
+export async function prewarmViewMenu(): Promise<void> {
+  if (!currentOwner()) return;
+  await ensureMenuView();
 }
 
 function menuBounds(win: BrowserWindow, request: ViewMenuToggleRequest): { x: number; y: number; width: number; height: number; zoom: number } {
@@ -231,7 +246,7 @@ export function attachViewMenuWindow(win: BrowserWindow): void {
   }
   if (menuView && !menuView.webContents.isDestroyed()) menuView.webContents.close();
   menuView = null;
-  loadPromise = null;
+  readyPromise = null;
   owner = win;
   attachOwnerMouseListener(win);
   win.once('closed', () => {
@@ -242,7 +257,7 @@ export function attachViewMenuWindow(win: BrowserWindow): void {
     ownerMouseListener = null;
     if (menuView && !menuView.webContents.isDestroyed()) menuView.webContents.close();
     menuView = null;
-    loadPromise = null;
+    readyPromise = null;
     owner = null;
   });
 }
@@ -256,7 +271,7 @@ export async function shutdownViewMenu(): Promise<void> {
   suppressTriggerMouseUp = false;
   const view = menuView;
   menuView = null;
-  loadPromise = null;
+  readyPromise = null;
   if (view && !view.webContents.isDestroyed()) {
     const win = currentOwner();
     if (win) {

@@ -21,6 +21,7 @@ let activateOwner: (() => void) | null = null;
 let overlay: BrowserWindow | null = null;
 let overlayReady = false;
 let globallyVisible = true;
+const dismissedPetIds = new Set<string>();
 let activities: PetActivity[] = [];
 let pointerTimer: NodeJS.Timeout | null = null;
 let expiryTimer: NodeJS.Timeout | null = null;
@@ -33,7 +34,7 @@ let stopSessions: (() => void) | null = null;
 let stopSwarm: (() => void) | null = null;
 
 function activePets(): number { return petLibraryState().pets.filter(pet => pet.enabled).length; }
-function shouldShow(): boolean { return globallyVisible && activePets() > 0; }
+function shouldShow(): boolean { return globallyVisible && petLibraryState().pets.some(pet => pet.enabled && !dismissedPetIds.has(pet.id)); }
 
 export function petOverlayControlState(): PetOverlayControlState {
   return { visible: shouldShow(), ready: !shouldShow() || overlayReady, activeCount: activePets(), activityCount: activities.length };
@@ -43,6 +44,7 @@ function snapshot(): PetOverlaySnapshot {
   const config = getConfig();
   return {
     visible: shouldShow(),
+    dismissedPetIds: [...dismissedPetIds],
     level: highestPetActivityLevel(activities),
     activities,
     theme: config.ui.theme,
@@ -185,6 +187,12 @@ function registerOverlayIpc(): void {
   ipcMain.on('pet-overlay:interactive', (event, value: unknown) => { if (validSender(event.sender.id)) setInteractive(value === true); });
   ipcMain.on('pet-overlay:focusOwner', event => { if (validSender(event.sender.id)) focusOwner(); });
   ipcMain.on('pet-overlay:openLibrary', event => { if (validSender(event.sender.id)) showOwner('pets'); });
+  ipcMain.on('pet-overlay:hidePet', (event, id: unknown) => {
+    if (!validSender(event.sender.id) || typeof id !== 'string') return;
+    if (!petLibraryState().pets.some(pet => pet.id === id && pet.enabled)) return;
+    dismissedPetIds.add(id);
+    void syncVisibility();
+  });
   ipcMain.on('pet-overlay:openActivity', (event, value: unknown) => {
     if (!validSender(event.sender.id) || !value || typeof value !== 'object') return;
     const sessionId = (value as Record<string, unknown>).sessionId;
@@ -254,8 +262,9 @@ async function syncVisibility(): Promise<void> {
   } catch (error) { logWarn(`pet overlay: ${error instanceof Error ? error.message : String(error)}`); }
 }
 
-export async function setPetOverlayVisible(visible: boolean): Promise<PetOverlayControlState> {
+export async function setPetOverlayVisible(visible: boolean, restoreDismissed = true): Promise<PetOverlayControlState> {
   globallyVisible = visible === true;
+  if (globallyVisible && restoreDismissed) dismissedPetIds.clear();
   await syncVisibility();
   return petOverlayControlState();
 }
@@ -265,7 +274,11 @@ export async function startPetOverlay(getOwner: () => BrowserWindow | null, requ
   if (started) return;
   started = true; ownerWindow = getOwner; activateOwner = requestOwner;
   registerOverlayIpc();
-  stopLibrary = onPetLibraryChange(() => { sendLibrary(); void syncVisibility(); });
+  stopLibrary = onPetLibraryChange(state => {
+    const active = new Set(state.pets.filter(pet => pet.enabled).map(pet => pet.id));
+    for (const id of dismissedPetIds) if (!active.has(id)) dismissedPetIds.delete(id);
+    sendLibrary(); void syncVisibility();
+  });
   stopSessions = onSessionChange(refreshPetOverlayActivities);
   stopSwarm = onSwarmChange(refreshPetOverlayActivities);
   screen.on('display-metrics-changed', fitOverlay);
@@ -286,5 +299,6 @@ export async function shutdownPetOverlay(): Promise<void> {
   screen.removeListener('display-removed', fitOverlay);
   const win = overlay; overlay = null; overlayReady = false;
   if (win && !win.isDestroyed()) win.destroy();
+  dismissedPetIds.clear();
   ownerWindow = null; activateOwner = null; started = false;
 }

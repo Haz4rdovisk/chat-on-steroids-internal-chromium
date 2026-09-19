@@ -440,7 +440,7 @@ it('shows the desktop overlay when a pet is explicitly enabled', async () => {
   const result = await handlers.get('pets:enabled')!(null, { id: 'tur-tur-sahur', enabled: true }) as any;
   expect(result.ok).toBe(true);
   expect(petIpcMocks.setEnabled).toHaveBeenCalledWith('tur-tur-sahur', true);
-  expect(petIpcMocks.setOverlayVisible).toHaveBeenCalledWith(true);
+  expect(petIpcMocks.setOverlayVisible).toHaveBeenCalledWith(true, false);
 });
 
 it('does not force global visibility when a pet is disabled', async () => {

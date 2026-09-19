@@ -12,6 +12,7 @@ afterEach(() => {
 });
 
 it('projects Browser and Pets, current checks and commands through the narrow menu preload', async () => {
+  const css = readFileSync(new URL('../src/renderer/view-menu.css', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../src/renderer/view-menu.html', import.meta.url), 'utf8')
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
   dom = new JSDOM(html, { url: 'https://local.test/' });
@@ -67,6 +68,9 @@ it('projects Browser and Pets, current checks and commands through the narrow me
   expect(dom.window.document.getElementById('viewPet')!.getAttribute('aria-pressed')).toBe('true');
   expect(dom.window.document.getElementById('viewSidebar')!.getAttribute('aria-pressed')).toBe('false');
   expect(dom.window.document.getElementById('viewZoomValue')!.textContent).toBe('117%');
+  expect(dom.window.document.querySelector('.view-menu-surface')!.classList.contains('is-opening')).toBe(true);
+  expect(css).toContain('.view-menu-surface.is-opening { transform-origin: top left; animation: surface-in 140ms ease-out; }');
+  expect(css).toContain('@media (prefers-reduced-motion: reduce)');
 
   dom.window.document.getElementById('viewBrowser')!.click();
   expect(command).toHaveBeenCalledWith('browser');

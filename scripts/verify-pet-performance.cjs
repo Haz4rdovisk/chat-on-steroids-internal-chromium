@@ -30,7 +30,7 @@ async function buildAndRun() {
       dark: { background: '#181818', sidebar: '#1a2129', accent: '#b0cbed', contrast: 60 },
       font: 'system', fontSize: 14, translucentSidebar: true
     };
-    let snapshot = { visible: true, level: 'idle', activities: [], theme: 'dark', appearance };
+    let snapshot = { visible: true, dismissedPetIds: [], level: 'idle', activities: [], theme: 'dark', appearance };
     let publishSnapshot = (_value: typeof snapshot) => {};
     (window as any).setPetVisible = (visible: boolean) => {
       snapshot = { ...snapshot, visible };

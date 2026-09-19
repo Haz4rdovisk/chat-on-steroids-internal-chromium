@@ -1694,6 +1694,9 @@ last native child when opened so it can paint above hosted ChatGPT views without
 geometry. Its preload exposes only the fixed browser/pet/sidebar/zoom commands. The menu snapshot
 projects translated labels and the current Appearance palette/font settings; the menu derives the
 same semantic CSS tokens as the main renderer rather than maintaining an independent theme.
+A hidden renderer prewarms after the shell loads, so the first press only snapshots, attaches and
+reveals it. Each opening snapshot restarts the composer's short surface reveal, with a reduced-motion
+path. The shell admits one toggle request at a time while main remains the open-state owner.
 
 Electron lifecycle is mapped deliberately: `did-start-loading` is the single Chrome-like loading
 and document boundary, `did-start-navigation` only updates the main-frame destination,
@@ -2503,7 +2506,10 @@ built renderer. `renderer/pet-machine.ts` owns gesture,
 animation and autonomous actions for both built-in and imported manifests;
 `pet-choreography.ts` positions text and effects for each manifest. Multiple pets
 may run together. A short click pokes the pet and restores/focuses the owner
-without changing its current screen; a drag does not raise the owner. A favorite
+without changing its current screen; a drag does not raise the owner. The pet's
+context-menu Hide action temporarily dismisses that pet without changing its
+Active membership in the library. The View menu's global visibility toggle hides
+all remaining pets and restores all active pets when switched on. A favorite
 anchors the task badge and compact tray. Its task rows keep state, title and
 summary on one line, scroll within a bounded height, and open their proven local
 session. Task transitions use the authored atlas: running/start → `spawn`,
@@ -2839,12 +2845,24 @@ tooltips; Advanced chat/request labels retain their copy action, with full value
 and Runtime diagnostics. Verification/last-seen ages remain in tooltips. A small plus opens Advanced, including
 the extension version and session capture. The request pipeline lives inside Runtime diagnostics.
 Every opening collapses Advanced and its nested Runtime diagnostics.
-Extension-only Overwrite/Timestamps and the redundant settings link are absent. A red header
-Connect action remains visible while disconnected and disappears only on confirmed connection,
-briefly highlighting the footer status (respecting reduced motion). Setup stays reachable from
-Settings and from Connect when configuration is incomplete. The View menu is a foreground native
+Extension-only Overwrite/Timestamps and the redundant settings link are absent. The footer
+expands Connect beside the status square while disconnected or connecting; confirmed connection
+contracts it back to the square, which always opens diagnostics. Settings remains an unframed
+22-pixel gear in a 36-pixel hit target; hover changes only its color, while the selected Settings
+state retains the shared navigation highlight. The connection control stays pinned to the footer's
+right edge. Sidebar resizing stops at 220 pixels so the expanded connection control remains inside
+the footer padding. Connect routes to Setup when
+configuration is incomplete. Focus moves to the square if connection completes while Connect
+is focused, and reduced-motion settings suppress the morph. The popover offers Disconnect only
+while connected and closes before disconnection begins; it never duplicates Connect or displays
+the pending Disconnecting phase. Connect, Connecting and Disconnecting share one expanded geometry
+in the footer so a phase label never triggers a second resize. Compact diagnostics and the expanded
+Advanced content use the composer's short surface reveal; Connect carries the success wash and
+Disconnect the danger wash without replacing their text labels. The View menu is a foreground native
 `WebContentsView`, not a z-index workaround; Appearance rows align controls at a shared minimum height and Setup uses a stable
 responsive title/language grid across locales.
+Once Setup is ready, the missing-companion banner follows bridge presence rather than tunnel
+startup. A failed Connect attempt must not flash and erase it; verified companion presence clears it.
 The companion sends a bounded snapshot on the authenticated `/diagnostics` route, outside the
 authority-bearing `/status` response. One pending diagnostic page read is shared; current
 connection/document epochs fence delayed results. The bridge cache is presentation only and

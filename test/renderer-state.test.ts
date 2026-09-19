@@ -513,6 +513,60 @@ it('keeps project keyboard focus across activity repaint without taking composer
   expect(listSessions).toHaveBeenCalledTimes(reads + 1);
 });
 
+it('moves Connect into the sidebar control and preserves status diagnostics after it contracts', async () => {
+  let connected: any;
+  let disconnected: any;
+  const connect = vi.fn(() => Promise.resolve({ ok: true, data: connected }));
+  const disconnect = vi.fn(() => Promise.resolve({ ok: true, data: disconnected }));
+  const mounted = await mountChat({ hasApiKey: true }, [], { connect, disconnect });
+  const doc = mounted.window.document;
+  const action = doc.getElementById('sidebarConnect') as HTMLButtonElement;
+  const disconnectAction = doc.getElementById('connectionPopoverDisconnect') as HTMLButtonElement;
+  const status = doc.getElementById('sidebarConnection') as HTMLButtonElement;
+  const popover = doc.getElementById('connectionPopover') as HTMLElement;
+  connected = structuredClone(mounted.state);
+  connected.status.state = 'connected';
+  connected.status.handshakeAt = Date.now();
+  disconnected = structuredClone(mounted.state);
+
+  expect(doc.getElementById('headerConnect')).toBeNull();
+  expect(action.dataset.collapsed).toBe('false');
+  expect(action.disabled).toBe(false);
+  expect(action.textContent).toBe('Connect');
+  expect(disconnectAction.hidden).toBe(true);
+  action.focus(); action.click(); await settle();
+  expect(connect).toHaveBeenCalledOnce();
+  expect(action.dataset.collapsed).toBe('true');
+  expect(action.getAttribute('aria-hidden')).toBe('true');
+  expect(action.tabIndex).toBe(-1);
+  expect(doc.activeElement).toBe(status);
+  expect(status.classList.contains('is-connected')).toBe(true);
+  expect(disconnectAction.hidden).toBe(false);
+
+  status.click();
+  expect(popover.hidden).toBe(false);
+  disconnectAction.click();
+  expect(popover.hidden).toBe(true);
+  await settle();
+  expect(disconnect).toHaveBeenCalledOnce();
+  expect(action.dataset.collapsed).toBe('false');
+  expect(action.getAttribute('aria-hidden')).toBe('false');
+  expect(action.disabled).toBe(false);
+  expect(disconnectAction.hidden).toBe(true);
+});
+
+it('routes an unconfigured Connect action to Setup without attempting a connection', async () => {
+  const connect = vi.fn();
+  const mounted = await mountChat({}, [], { connect });
+  const doc = mounted.window.document;
+  const action = doc.getElementById('sidebarConnect') as HTMLButtonElement;
+  expect(action.dataset.collapsed).toBe('false');
+  expect(action.title).toContain('API key');
+  action.click();
+  expect(connect).not.toHaveBeenCalled();
+  expect(doc.querySelector('.app')?.getAttribute('data-screen')).toBe('settings');
+});
+
 it('keeps global connection controls in a compact sidebar popover', async () => {
   const mounted = await mountChat({ hasApiKey: true });
   const doc = mounted.window.document;
@@ -566,7 +620,9 @@ it('keeps global connection controls in a compact sidebar popover', async () => 
   expect(doc.getElementById('connectionPopoverTitle')!.title).toMatch(/verified/i);
   expect(doc.getElementById('connectionPipeline')!.closest('details')).toBe(runtime);
   expect(doc.getElementById('connectionPopoverExtension')!.textContent).toBe('v2.1.13');
-  expect((doc.getElementById('connectionPopoverToggle') as HTMLButtonElement).textContent).toBe('Disconnect');
+  const disconnectAction = doc.getElementById('connectionPopoverDisconnect') as HTMLButtonElement;
+  expect(disconnectAction.textContent).toBe('Disconnect');
+  expect(disconnectAction.hidden).toBe(false);
 
   doc.body.dispatchEvent(new mounted.window.MouseEvent('click', { bubbles: true }));
   expect(popover.hidden).toBe(true);
@@ -578,6 +634,8 @@ it('keeps the Settings footer action visible while settings are open', async () 
   const settings = doc.getElementById('workspaceSettings') as HTMLButtonElement;
 
   expect(settings.hidden).toBe(false);
+  expect(settings.textContent?.trim()).toBe('');
+  expect(settings.getAttribute('aria-label')).toBe('Settings');
   settings.click();
   expect(settings.hidden).toBe(false);
   expect(settings.classList.contains('is-sel')).toBe(true);
@@ -961,8 +1019,8 @@ it('guides rootless setup from the capabilities that actually need a filesystem 
   ];
 
   mounted.push(mixed);
-  const connect = mounted.window.document.getElementById('connectionPopoverToggle') as HTMLButtonElement;
-  expect(connect.disabled).toBe(true);
+  const connect = mounted.window.document.getElementById('sidebarConnect') as HTMLButtonElement;
+  expect(connect.disabled).toBe(false);
   expect(connect.title).toContain('Choose a folder');
   expect(mounted.window.document.querySelector('[data-step="folder"]')?.classList.contains('is-current')).toBe(true);
 
@@ -970,7 +1028,7 @@ it('guides rootless setup from the capabilities that actually need a filesystem 
   commandAndDesktop.config.capabilities.browse = false;
   commandAndDesktop.config.capabilities.command = true;
   mounted.push(commandAndDesktop);
-  expect(connect.disabled).toBe(true);
+  expect(connect.disabled).toBe(false);
   expect(connect.title).toContain('Choose a folder');
 
   const desktopOnly = structuredClone(mixed) as any;
@@ -1255,17 +1313,27 @@ it('asks for an extension reload only when the extension is older than this app'
   expect(action.hidden).toBe(true);
 });
 
-it('shows a missing-extension reminder while connected and clears it after the companion reports in', async () => {
-  const mounted = await mountChat();
-  const connected = structuredClone(mounted.state) as any;
-  connected.status.state = 'connected'; connected.bridge.running = true; connected.bridge.present = false;
-  mounted.push(connected);
+it('keeps the missing-extension reminder through a failed Connect attempt and clears it only with companion evidence', async () => {
+  const mounted = await mountChat({ hasApiKey: true });
   const doc = mounted.window.document;
-  expect(doc.getElementById('updateText')!.textContent).toContain('Browser extension not connected');
-  expect(doc.getElementById('updateExtension')!.hidden).toBe(false);
-  connected.bridge.present = true; connected.bridge.extensionVersion = connected.update.current;
-  mounted.push(connected);
-  expect(doc.getElementById('updateNotice')!.hidden).toBe(true);
+  const notice = doc.getElementById('updateNotice')!;
+  const state = structuredClone(mounted.state) as any;
+  expect(notice.hidden).toBe(false);
+  for (const status of ['starting-server', 'connecting-tunnel', 'tunnel-unavailable', 'disconnected', 'connected', 'offline']) {
+    state.status.state = status;
+    mounted.push(state);
+    expect(notice.hidden, `missing companion remains actionable through ${status}`).toBe(false);
+    expect(doc.getElementById('updateText')!.textContent).toContain('Browser extension not connected');
+    expect(doc.getElementById('updateExtension')!.hidden).toBe(false);
+  }
+  state.bridge.present = true; state.bridge.extensionVersion = state.update.current;
+  mounted.push(state);
+  expect(notice.hidden).toBe(true);
+
+  state.bridge.present = false;
+  state.config.tunnel.tunnelId = '';
+  mounted.push(state);
+  expect(notice.hidden, 'an incomplete Setup should not show a competing extension reminder').toBe(true);
 });
 
 it('keeps plugin connection controls out of general Setup and preserves its tunnel during unrelated saves', async () => {

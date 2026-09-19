@@ -10,7 +10,7 @@ export function initSidebarResize(): SidebarResizeController {
   const handle = document.getElementById('sidebarResize')!;
   const toggle = document.getElementById('sidebarToggle')!;
   const key = 'chat-on-steroids.sidebar-width';
-  const minimum = 180;
+  const minimum = 220;
   const maximum = () => Math.max(minimum, Math.min(480, window.innerWidth / 2));
   let preferred: number | null = null;
   let collapsed = false;

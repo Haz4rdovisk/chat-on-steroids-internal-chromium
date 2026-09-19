@@ -47,6 +47,10 @@ function apply(snapshot: ViewMenuSnapshot): void {
   button('viewSidebar').setAttribute('aria-pressed', String(!snapshot.sidebarCollapsed));
   button('viewPet').disabled = snapshot.petVisible && !snapshot.petReady;
   document.getElementById('viewZoomValue')!.textContent = `${snapshot.zoomPercent}%`;
+  const surface = document.querySelector<HTMLElement>('.view-menu-surface')!;
+  surface.classList.remove('is-opening');
+  void surface.offsetWidth;
+  surface.classList.add('is-opening');
 }
 
 document.addEventListener('click', event => {

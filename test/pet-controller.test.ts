@@ -38,6 +38,23 @@ it('opens the library when no pet is enabled', async () => {
   controller.toggle(); expect(openLibrary).toHaveBeenCalledTimes(1); expect(setVisible).not.toHaveBeenCalled();
 });
 
+it('restores a temporarily hidden active pet through the View toggle', async () => {
+  const library: PetLibraryState = { pets: [{ id: 'tur-tur-sahur', displayName: 'Tur Tur Sahur', description: '', kind: 'builtin', builtin: true, enabled: true, favorite: false }] };
+  let state: PetOverlayControlState = { visible: false, ready: true, activeCount: 1, activityCount: 0 };
+  const openLibrary = vi.fn();
+  const setVisible = vi.fn((visible: boolean) => { state = { ...state, visible }; return ok(state); });
+  const api: any = {
+    petsList: () => ok(library), petsOverlayState: () => ok(state), petsSetOverlayVisible: setVisible,
+    onPetOverlayStateChanged: () => vi.fn()
+  };
+  const { initPet } = await import('../src/renderer/pet.js');
+  controller = initPet(api, openLibrary); await Promise.resolve(); await Promise.resolve();
+  expect(controller.isVisible()).toBe(false);
+  controller.toggle();
+  expect(setVisible).toHaveBeenCalledWith(true);
+  expect(openLibrary).not.toHaveBeenCalled();
+});
+
 it('keeps Pets in the sidebar and gives the Chats action the refresh glyph', () => {
   const page = new JSDOM(readFileSync(new URL('../src/renderer/index.html', import.meta.url), 'utf8'));
   expect(page.window.document.querySelector('#sidebarPets .ph-paw-print')).not.toBeNull();

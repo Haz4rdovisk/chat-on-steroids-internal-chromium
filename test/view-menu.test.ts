@@ -164,6 +164,31 @@ it('renders above native browser views and remains inside the owner window', asy
   expect(view.setVisible).toHaveBeenLastCalledWith(true);
 });
 
+it('prewarms the hidden renderer so the first toggle only attaches and reveals it', async () => {
+  const owner = new fake.FakeBrowserWindow() as any;
+  menu.attachViewMenuWindow(owner);
+
+  await menu.prewarmViewMenu();
+  const view = fake.views.at(-1)!;
+  expect(fake.views).toHaveLength(1);
+  expect(view.webContents.loadFile).toHaveBeenCalledOnce();
+  expect(view.webContents.executeJavaScript).toHaveBeenCalledOnce();
+  expect(view.webContents.executeJavaScript).toHaveBeenCalledWith('document.fonts.ready');
+  expect(view.webContents.executeJavaScript.mock.calls[0]?.[0]).not.toContain('requestAnimationFrame');
+  expect(view.setVisible).toHaveBeenLastCalledWith(false);
+  expect(owner.contentView.addChildView).not.toHaveBeenCalled();
+
+  expect(await menu.toggleViewMenu({
+    anchor: { x: 40, y: 0, width: 30, height: 28 },
+    snapshot: snapshot()
+  })).toEqual({ open: true });
+  expect(fake.views).toHaveLength(1);
+  expect(view.webContents.loadFile).toHaveBeenCalledOnce();
+  expect(view.webContents.executeJavaScript).toHaveBeenCalledOnce();
+  expect(owner.contentView.addChildView).toHaveBeenCalledOnce();
+  expect(view.setVisible).toHaveBeenLastCalledWith(true);
+});
+
 it('closes on a second toggle instead of reopening or reattaching the native menu', async () => {
   const owner = new fake.FakeBrowserWindow() as any;
   menu.attachViewMenuWindow(owner);
