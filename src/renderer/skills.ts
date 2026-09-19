@@ -30,6 +30,9 @@ type Options = {
   deferCommand?: (name: string) => boolean;
 };
 
+/** Marks a textarea projection that consumed a composer control, not authored text. */
+export const COMPOSER_COMMAND_PROJECTION = Symbol('composer-command-projection');
+
 function split(text: string): ReturnType<typeof skillDirectives> {
   try { return skillDirectives(text); }
   catch { return { ids: [], prefix: '', body: text }; } // Incomplete typed commands remain visible.
@@ -94,11 +97,14 @@ export function initSkills(options: Options) {
     displayedPrefix = draft.prefix; prefixOwner = options.owner(); input.value = draft.body;
     renderSelected();
   };
-  const project = (authored: string): void => {
+  const project = (authored: string, source: 'authored' | 'command' = 'authored'): void => {
     options.saveDraft(authored);
     const draft = split(authored); displayedPrefix = draft.prefix; prefixOwner = options.owner(); input.value = draft.body;
     renderSelected(); input.setSelectionRange(input.value.length, input.value.length);
-    input.dispatchEvent(new input.ownerDocument.defaultView!.Event('input', { bubbles: true }));
+    const view = input.ownerDocument.defaultView!;
+    input.dispatchEvent(source === 'command'
+      ? new view.CustomEvent('input', { bubbles: true, detail: COMPOSER_COMMAND_PROJECTION })
+      : new view.Event('input', { bubbles: true }));
   };
   const choose = (skill: typeof choices[number]): void => {
     if ('command' in skill) {
@@ -112,7 +118,7 @@ export function initSkills(options: Options) {
           : `${draft.prefix}${draft.prefix && !/\s$/.test(draft.prefix) ? '\n' : ''}/${skill.command}\n`;
         close(); project(prefix + draft.body); input.focus(); return;
       }
-      close(); project(authored); options.command?.(skill.command); input.focus(); return;
+      close(); project(authored, 'command'); options.command?.(skill.command); input.focus(); return;
     }
     if (!current() || composing) { close(); return; }
     const range = fragment();
