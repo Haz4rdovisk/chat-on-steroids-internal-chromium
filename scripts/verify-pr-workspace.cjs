@@ -60,7 +60,9 @@ app.whenReady().then(async () => {
         getSwarm:()=>ok({running:false,runId:null,agents:[],maxWorkers:2,pendingReports:0}),getChatModels:()=>ok({state:'unknown',models:[]}),
         skillLibrary:()=>ok({skills:[personal,projectSkill],roots:[],errors:[],includeInstructions:true}),
         listSkills:()=>ok([personal]),listInputs:()=>ok([]),getSessionPlan:()=>ok(null),browserPreferences:()=>ok({overwrite:true,durations:false}),
-        companionDiagnostics:()=>ok(diag),internalBrowser:undefined,
+        companionDiagnostics:()=>ok(diag),internalBrowser:()=>ok({open:false,ready:true,tabId:17,tabs:[
+          {id:17,active:true,status:'complete',title:'Fixture chat',url:'https://chatgpt.com/c/fixture-chat'}
+        ]}),
         listProjectFiles:(id,directory='')=>ok({projectId:id,projectName:'Demo workspace',directory,truncated:false,
           entries:['README.md','example.ts','preview.pdf'].map(name=>({name,path:name,kind:'file',bytes:files[name]?.length??${pdf.length}}))}),
         watchProjectFiles:()=>ok(true),previewProjectFile:(id,name)=>ok(info(id,name)),
