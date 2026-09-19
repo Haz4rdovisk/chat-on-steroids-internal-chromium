@@ -201,8 +201,8 @@ describe('the session card header', () => {
     expect(rule('#workspaceSettings')).toContain('place-items: center');
     expect(rule('#workspaceSettings')).toContain('justify-content: center');
     expect(rule('#workspaceSettings')).toContain('border: 0');
+    expect(rule('#workspaceSettings:hover')).toContain('background: var(--hover)');
     expect(rule('#workspaceSettings')).toContain('background: transparent');
-    expect(rule('#workspaceSettings:hover')).toContain('background: transparent');
     expect(rule('#workspaceSettings.is-sel')).toContain('background: var(--hover)');
     expect(rule('#workspaceSettings .ico')).toContain('font-size: 22px');
     expect(document.getElementById('workspaceSettings')!.textContent?.trim()).toBe('');
@@ -604,6 +604,23 @@ describe('the session timeline', () => {
 });
 
 describe('the window as a whole', () => {
+  it('keeps the Files toolbar on one stable row and integrates Refresh with its actions', () => {
+    expect(rule('.file-panel-toolbar')).toContain('flex-wrap: nowrap');
+    expect(rule('.file-panel-toolbar')).toContain('overflow-x: auto');
+    expect(rule('.file-panel-toolbar .file-panel-action')).toContain('flex: 0 0 auto');
+    expect(rule('.file-panel-refresh')).toContain('flex: 0 0 30px');
+    expect(rule('.file-panel-refresh')).not.toContain('margin-left');
+    expect(css).not.toContain('.file-panel-toolbar .file-panel-action span { display: none; }');
+  });
+
+  it('keeps right work-panel grid tracks interpolation-compatible with their closed state', () => {
+    const closed = rule("[data-panel='chat']");
+    const open = rule("[data-panel='chat'].has-agent-panel,\n[data-panel='chat'].has-file-panel");
+    expect(closed).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, 0px)');
+    expect(closed).toContain('transition: grid-template-columns 220ms cubic-bezier(.16, 1, .3, 1)');
+    expect(open).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, var(--work-panel-width, 42%))');
+  });
+
   it('anchors composer rows to the bottom while its measured height animates', () => {
     expect(rule('.composer')).toContain('align-content: end');
     expect(rule('.composer.is-resizing')).toContain('overflow: clip');
@@ -640,6 +657,7 @@ describe('the window as a whole', () => {
       '.msg.rich .markdown-table',
       '.usage-heatmap-surface',
       '.usage-table-stack',
+      '.file-panel-toolbar',
       '.file-preview-markdown pre',
       '.file-preview-markdown-table',
       '.file-pdf-viewport',

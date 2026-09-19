@@ -2280,11 +2280,13 @@ it('stops directly from the empty composer without a second Stop menu action', a
   expect(send.getAttribute('aria-label')).toBe('Stop turn');
   expect(send.querySelectorAll('.send-icon')).toHaveLength(1);
   expect(send.querySelector('.send-icon')?.classList.contains('ph-stop')).toBe(true);
+  expect(send.querySelector('.send-icon')?.classList.contains('ph-fill')).toBe(true);
   input.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   await settle(); expect(stop).not.toHaveBeenCalled();
   input.value = 'Keep this draft'; input.dispatchEvent(new w.Event('input'));
   expect(send.getAttribute('aria-label')).toBe('Send message');
   expect(send.querySelector('.send-icon')?.classList.contains('ph-arrow-up')).toBe(true);
+  expect(send.querySelector('.send-icon')?.classList.contains('ph')).toBe(true);
   expect(w.document.getElementById('sendOptions')!.hidden).toBe(false);
   expect(w.document.getElementById('stopTurnAction')).toBeNull();
   input.value = ''; input.dispatchEvent(new w.Event('input'));
