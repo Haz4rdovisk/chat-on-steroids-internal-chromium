@@ -27,7 +27,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1400, height: 900, webPreferences: { offscreen: true } });
   await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<!doctype html><html><head></head>${body}</html>`));
   await win.webContents.insertCSS(css);
-  await win.webContents.executeJavaScript(`(() => {
+  const emptyFolders = await win.webContents.executeJavaScript(`(() => {
     document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('is-active'));
     document.querySelector('[data-panel="home"]').classList.add('is-active');
     document.documentElement.dataset.theme = 'dark';
@@ -38,6 +38,21 @@ app.whenReady().then(async () => {
     document.getElementById('backToChat').hidden = false;
     document.querySelector('.sidebar-sessions').hidden = true;
     document.getElementById('newChat').hidden = true;
+    const empty = document.getElementById('rootsEmpty');
+    const emptySurface = empty.closest('.workspace-surface');
+    const emptyRect = empty.getBoundingClientRect();
+    const surfaceRect = emptySurface.getBoundingClientRect();
+    const emptyStyle = getComputedStyle(empty);
+    const emptyFolders = {
+      visible: empty.checkVisibility(),
+      height: emptyRect.height,
+      surfaceHeight: surfaceRect.height,
+      centerDelta: Math.abs((emptyRect.top + emptyRect.bottom - surfaceRect.top - surfaceRect.bottom) / 2),
+      marginTop: emptyStyle.marginTop,
+      marginBottom: emptyStyle.marginBottom,
+      paddingTop: emptyStyle.paddingTop,
+      paddingBottom: emptyStyle.paddingBottom
+    };
     const permission = (title, detail) => '<div class="perm is-on"><div class="perm-head"><button class="perm-main"><i class="ico"></i><i class="ico"></i><span><b>' + title + '</b><em>' + detail + '</em></span></button><span class="sw"><input type="checkbox" checked><i></i></span></div></div>';
     document.getElementById('groups').innerHTML = [
       permission('Look at files', '4 permissions'), permission('Change files', '4 permissions'),
@@ -52,7 +67,14 @@ app.whenReady().then(async () => {
     document.getElementById('rootsEmpty').hidden = true;
     document.getElementById('facts').innerHTML = '<div class="fact"><span>Route to OpenAI</span><code>connected</code></div><div class="fact"><span>Tools across Core + Desktop</span><code>30 total · 3 folders</code></div>';
     document.getElementById('homeFeed').innerHTML = Array.from({ length: 8 }, (_, index) => '<p><time>13:4' + index + '</time><span class="what">renderer</span><span class="rest">Workspace event ' + index + '</span></p>').join('');
+    return emptyFolders;
   })()`);
+  assert.equal(emptyFolders.visible, true, JSON.stringify(emptyFolders));
+  assert.ok(emptyFolders.height > 0 && emptyFolders.surfaceHeight > 0, JSON.stringify(emptyFolders));
+  assert.equal(emptyFolders.marginTop, '0px', JSON.stringify(emptyFolders));
+  assert.equal(emptyFolders.marginBottom, '0px', JSON.stringify(emptyFolders));
+  assert.equal(emptyFolders.paddingTop, emptyFolders.paddingBottom, JSON.stringify(emptyFolders));
+  assert.ok(emptyFolders.centerDelta < 1, JSON.stringify(emptyFolders));
 
   const inspect = async (width) => {
     win.setSize(width, 900);
