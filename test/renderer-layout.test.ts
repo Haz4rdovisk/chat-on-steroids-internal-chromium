@@ -604,8 +604,17 @@ describe('the session timeline', () => {
 });
 
 describe('the window as a whole', () => {
+  it('anchors composer rows to the bottom while its measured height animates', () => {
+    expect(rule('.composer')).toContain('align-content: end');
+    expect(rule('.composer.is-resizing')).toContain('overflow: clip');
+    expect(rule('.composer.is-resizing')).toContain('will-change: height');
+  });
+
   it('keeps workspace settings in a scrollable column', () => {
     expect(rule("[data-panel='home']")).toContain('overflow-y: auto');
+    expect(rule('#rootsEmpty')).toContain('margin: 0');
+    expect(rule('#rootsEmpty')).toContain('padding: 10px 14px');
+    expect(rule('#rootsEmpty')).toContain('line-height: 1.5');
   });
 
   /**

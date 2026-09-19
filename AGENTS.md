@@ -826,7 +826,10 @@ synchronously, including New Chat and A-to-B-to-A, before any asynchronous read 
 The desktop composer uses native CSS content sizing, bounded at 220px. Layout owns its
 height across draft changes, hidden panels and width changes; do not persist a measured
 `scrollHeight` as an inline height. Empty and fitting input must not overflow; longer text
-remains scrollable at the cap. `scripts/verify-composer-layout.cjs` checks real Electron layout.
+remains scrollable at the cap. A composer-local `ResizeObserver` bridges only its previous and
+next border-box height with a bounded Web Animation, then releases height back to CSS. Hidden
+views establish a fresh baseline, rapid changes converge to the newest native size, and reduced
+motion skips the spatial transition. `scripts/verify-composer-layout.cjs` checks real Electron layout.
 On an empty chat, the welcome prompt is anchored to the stable composition viewport spanning
 the conversation body, dock and composer. Selected Skill/action pills and attachments may grow
 the composer without recentering that prompt against the smaller residual body row;
@@ -2737,7 +2740,9 @@ Theme and layout preferences do not change backend authority.
 Workspace Settings uses the same centered 940px canvas, heading hierarchy and bounded surfaces
 as the Plugins, Skills and Pets libraries. Its sections remain one semantic column in the order
 Permissions, Folders, Health and Activity: the approved-folder list has unbounded height and must
-not displace or strand a neighboring column. Existing control IDs and main-process owners remain
+not displace or strand a neighboring column. The empty Folders guidance resets paragraph margins
+and uses symmetric vertical padding so one-line and wrapped copy stay centered in its surface.
+Existing control IDs and main-process owners remain
 unchanged. `scripts/verify-workspace-ui.cjs` checks the order, shared width and overflow in real
 Chromium with both desktop and narrow viewports, including a long folder list.
 Usage Settings shares that canvas and one-column section rhythm: recorded summary, estimated

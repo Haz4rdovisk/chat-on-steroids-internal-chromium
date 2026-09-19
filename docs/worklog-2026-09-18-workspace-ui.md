@@ -31,3 +31,10 @@ supported width.
 - focused renderer layout test for the scrollable Workspace panel
 - live Electron inspection with the canonical development profile
 - `git diff --check`
+
+## Follow-up: empty Folders alignment
+
+The generic empty-state rule had 4 px of top padding and 14 px at the bottom, placing the Folders
+guidance visibly above the center of its bounded surface. `#rootsEmpty` now owns a zero paragraph
+margin, symmetric 10 px vertical padding and an explicit 1.5 line-height. The workspace Chromium
+fixture checks equal padding and a sub-pixel center delta before populating its long-folder case.
