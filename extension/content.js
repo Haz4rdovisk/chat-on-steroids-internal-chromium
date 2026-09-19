@@ -1781,19 +1781,22 @@
    * whole point of this batch is that the local session log stops containing those.
    */
   function generationTurn(turns = CLF_DOM.turns()) {
+    const question = turns.findLastIndex(turn => turn.role === 'user');
+    const ownsQuestion = Boolean(openedUserMessageId && question >= 0 &&
+      CLF_DOM.messagesIn(turns[question]).some(message => message.role === 'user' && message.id === openedUserMessageId));
     // Hydration may remount an old answer with a new node after our baseline.
     // An adopted generation still belongs after the latest question; DOM novelty
     // above that boundary cannot establish or retain its assistant owner.
     if (unwitnessedGeneration) {
-      const question = turns.findLastIndex(turn => turn.role === 'user');
       if (question >= 0) turns = turns.slice(question + 1);
     }
-    if (genNode) {
-      const held = turnForNode(genNode, turns);
-      if (held) return held;
-      genNode = null;
-    }
     const latest = currentAssistantTurn(turns);
+    const heldTurn = genNode ? turnForNode(genNode, turns) : null;
+    // One question can publish interim and final prose in different sections.
+    // Keep the held section unless the exact same question proves a newer one
+    // can belong to this response; its novelty is still checked below.
+    if (heldTurn && (!ownsQuestion || heldTurn === latest)) return heldTurn;
+    if (!heldTurn) genNode = null;
     if (!latest) return null;
     // Any node of the logical turn, not just the first. ChatGPT splits one answer across
     // sibling sections, and a new sibling appended to a section that was already there is
@@ -1803,6 +1806,8 @@
       genNode = node;
       return latest;
     }
+    // Reordered or revised pre-Send history cannot replace a still-mounted owner.
+    if (heldTurn) return heldTurn;
     for (const held of priorMarks) {
       if (!latest.nodes && held.node !== latest.node) continue;
       if (latest.nodes && latest.nodes.indexOf(held.node) < 0) continue;
@@ -3003,7 +3008,7 @@
   // 11: adds exact typed thought-notification ids and ephemeral DOM stamps for selective
   //     presentation suppression. Caption text and per-call adjacency remain non-authority.
   // 12: adds exact provider-message/sediment generated-image descriptors and DOM pixel stamps.
-  const FIBER_VERSION = 12;
+  const FIBER_VERSION = 13;
   const FIBER_TIMEOUT_MS = 1500;
   const FIBER_MAX_ROWS = 400;
   /** Assistant turns whose per-call evidence is accepted from one scan. */
@@ -3299,7 +3304,15 @@
     }
     const keptImages = images.filter(image => !conflictingImages.has(`${image.messageId}\u0000${image.assetId}`));
     const endMessageId = cap(raw.endMessageId, 200);
-    if (kept.length === 0 && requests.length === 0 && keptMessages.length === 0 && keptActivities.length === 0 &&
+    const codeModeCalls = [], codeIds = new Set();
+    for (const entry of (Array.isArray(raw.codeModeCalls) ? raw.codeModeCalls : []).slice(0, FIBER_MAX_CALLS)) {
+      const messageId = cap(entry && entry.messageId, 200);
+      if (!messageId) continue;
+      if (codeIds.has(messageId)) return null;
+      codeIds.add(messageId);
+      codeModeCalls.push({ messageId, tool: 'functions.exec', requestId: cap(entry.requestId, 100), answered: entry.answered === true });
+    }
+    if (codeModeCalls.length === 0 && kept.length === 0 && requests.length === 0 && keptMessages.length === 0 && keptActivities.length === 0 &&
         keptThoughtNotifications.length === 0 && keptImages.length === 0 && !endMessageId) {
       return null;
     }
@@ -3310,6 +3323,7 @@
       conversationConflict: raw.conversationConflict === true,
       endMessageId,
       calls: kept,
+      codeModeCalls,
       requests,
       messages: keptMessages,
       activities: keptActivities,
@@ -6225,12 +6239,15 @@
       job = data.job || null;
       operationProgress = data.progress || null;
       pendingTools = Number.isFinite(Number(data.pendingTools)) ? Number(data.pendingTools) : 0;
-      // The generation this chat has open in the app, if any. Only ever *read* by
-      // resumeOpenTurn(), on the boot pull, and only to work out whether this document is
-      // standing in the middle of a turn a previous one opened. See adoptTurnId.
+      // The durable response can arrive after boot's empty/refused activity
+      // reply. Until this document has owned a turn, exact question proof may
+      // still restore it through this same feed, even after native completion.
       appActiveTurnId = typeof data.activeTurnId === 'string' && data.activeTurnId ? data.activeTurnId : null;
       if (!generating && pendingTools > 0 && appActiveTurnId === turnId && fiberSettled?.reason === 'thinking_failed') noteTurnProgress();
-      if (resumeIdentityPending) {
+      const recordedQuestionId = typeof data.recordedQuestionId === 'string' ? data.recordedQuestionId : null;
+      const lateAdoption = !generating && !turnId && genCount === 0 && !userStopped && !commandAttempt &&
+        recordedQuestionId && stopQuestionMatches(recordedQuestionId);
+      if (resumeIdentityPending || lateAdoption) {
         // Runtime activity can expire while the durable generation still owns
         // this question. Reload must retain that identity without turning the
         // expired activity projection into a new user send.
@@ -6241,8 +6258,7 @@
         const stopReady = !data.stopTurn || (data.stopTurn.turnId === recordedTurnId && stopQuestionMatches(data.stopTurn.userMessageId));
         if (!recordedTurnId || stopReady) {
           resumeIdentityPending = false;
-          if (recordedTurnId) adoptOpenTurn(recordedTurnId, data.stopTurn?.userMessageId ??
-            (typeof data.recordedQuestionId === 'string' ? data.recordedQuestionId : null));
+          if (recordedTurnId) adoptOpenTurn(recordedTurnId, data.stopTurn?.userMessageId ?? recordedQuestionId);
         }
       }
       tokens = Number.isFinite(Number(data.tokens)) ? Number(data.tokens) : 0;
@@ -7991,11 +8007,13 @@
     if (progress?.tools?.count > 0 && now - progress.tools.since >= 3000)
       return frame(progress.tools.count === 1 ? 'Waiting for a local tool to finish' : `Waiting for ${progress.tools.count} local tools to finish`);
     const workers = progress?.workers;
-    if (workers && (workers.active > 0 || workers.failed > 0)) {
+    // Failed workers remain in history and the agent panel. Only live workers
+    // explain this wait; a historical failure must not pin it across handoffs.
+    if (workers?.active > 0) {
       const summary = `${workers.finished} finished · ${workers.active} running${workers.failed ? ` · ${workers.failed} failed` : ''}`;
       // Running siblings are not proof that the prime is blocked on them.
-      return frame(workers.active === 1 ? `Worker still running: ${workers.names?.[0] || 'Worker'}` : workers.active > 1
-        ? `${workers.active} workers still running` : 'A worker needs attention', summary);
+      return frame(workers.active === 1 ? `Worker still running: ${workers.names?.[0] || 'Worker'}`
+        : `${workers.active} workers still running`, summary);
     }
     return input.generating ? frame('Still waiting for the current operation to complete') : null;
   }
@@ -8448,7 +8466,7 @@
     // summary of a machine state that had already moved on.
     // Automatic runs stop the turn exactly like a press does. They are *started* by a turn
     // being in flight, so refusing to interrupt one would refuse every automatic run.
-    const barrier = await stopAndSettle(forId, forEpoch, forRun, sameTurn);
+    const barrier = await stopAndSettle(forId, forEpoch, forRun, sameTurn, automatic);
     // Every await above can span an SPA navigation. `conversationId` is mutable global
     // state, so continuing after A -> B would otherwise post B to /compact and type A's
     // handoff instruction into B's composer. The new chat's reset already owns its UI state;
@@ -8534,7 +8552,7 @@
    * not hear about it, and the handoff would describe a machine that no longer exists by
    * the time the fresh chat reads it.
    */
-  async function stopAndSettle(forId, forEpoch, forRun, sameTurn) {
+  async function stopAndSettle(forId, forEpoch, forRun, sameTurn, automatic) {
     const current = () =>
       alive &&
       nativeRun === forRun &&
@@ -8542,6 +8560,67 @@
       epoch === forEpoch &&
       CLF_DOM.conversationId() === forId && sameTurn();
     if (!forId || !current()) return 'This chat changed before compaction could start.';
+    if (automatic && CLF_DOM.generating()) {
+      // A local result can file the ticket before ChatGPT receives that result. Stopping
+      // here used to lose completed work from the brief. Require native receipt first;
+      // pendingTools === 0 only proves that execution on this machine has drained.
+      const awaitingResults = new Map();
+      const awaitingRequests = new Set();
+      const sourceNodes = new Set();
+      const received = () => {
+        const pageTurn = generationTurn();
+        const source = fiberTurnFor(pageTurn);
+        if (!source) return false;
+        for (const node of pageTurn.nodes || [pageTurn.node]) if (node) sourceNodes.add(node);
+        // The response may add a sibling while the parent result lands in its original
+        // section. Retain those exact nodes; fresh scan stamps still own every lookup.
+        const sources = new Set([source]);
+        for (const node of sourceNodes) {
+          const prior = fiberTurnForNode(node);
+          if (prior) sources.add(prior);
+        }
+        // Enclosing native calls retain their own message receipt even before any
+        // child path materializes, and are never reported as local MCP invocations.
+        const calls = [...sources].flatMap(turn => [...turn.calls, ...turn.codeModeCalls]);
+        const ids = new Set();
+        for (const call of calls) {
+          if (ids.has(call.messageId)) return false;
+          ids.add(call.messageId);
+        }
+        for (const turn of sources) {
+          // Request evidence can precede the first labelled connector row. It is only
+          // a pre-row fence; repeated calls sharing that id still need individual receipts.
+          for (const request of turn.requests) {
+            if (!calls.some(call => call.requestId === request.requestId)) awaitingRequests.add(request.requestId);
+          }
+        }
+        for (const call of calls) {
+          const pending = awaitingResults.get(call.messageId);
+          if (pending && (pending.tool !== call.tool ||
+              (pending.requestId && call.requestId && pending.requestId !== call.requestId))) return false;
+          if (call.answered) {
+            awaitingResults.delete(call.messageId);
+            if (call.requestId) awaitingRequests.delete(call.requestId);
+          } else if (!pending) awaitingResults.set(call.messageId, call);
+        }
+        // A missing row or a failed scan cannot acknowledge a call seen earlier.
+        return awaitingResults.size === 0 && awaitingRequests.size === 0;
+      };
+      received();
+      nativePhase = 'settling';
+      renderControl();
+      const ready = await waitUntil(async () => {
+        if (!current()) return true;
+        const count = await peekPendingTools(forId);
+        if (!current()) return true;
+        if (count !== 0) return false;
+        const fresh = await refreshFiber(null, true);
+        if (!current()) return true;
+        return fresh && received();
+      }, TOOL_SETTLE_MS);
+      if (!current()) return 'This chat changed while compaction was waiting for tool results.';
+      if (!ready) return 'ChatGPT has not confirmed receiving the latest tool results. Nothing was compacted.';
+    }
     // INTERRUPTING — stop the turn rather than wait it out. That is the whole request, by
     // hand or automatically: this happens because the turn is long, not because it is
     // nearly done.
