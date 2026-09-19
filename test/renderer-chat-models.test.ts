@@ -209,7 +209,7 @@ it('offers only observed models, prefers supported GPT-6 High, and replaces a re
   expect(select('composerReasoning').value).toBe('high');
   expect(dom.window.document.getElementById('composerModelChoices')!.textContent).not.toContain('default');
   const reload = dom.window.document.getElementById('refreshComposerModels')!;
-  expect(reload.querySelector('svg')).not.toBeNull();
+  expect(reload.querySelector('.ph-arrow-clockwise')).not.toBeNull();
   expect(reload.textContent).toBe('');
   expect(reload.getAttribute('aria-label')).toBe('Reload ChatGPT models');
   const slider = dom.window.document.querySelector<HTMLInputElement>('#composerPowerChoices input')!;
