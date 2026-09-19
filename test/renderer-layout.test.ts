@@ -66,6 +66,7 @@ it('searches whole settings sections without empty headings, orphaned controls o
 it('gives Plugins, Skills and Pets the same restrained page entrance as Settings', () => {
   expect(rule(".app[data-screen='library'] .panel.is-active")).toContain('animation: surface-in 160ms ease-out');
   expect(document.querySelectorAll("[data-panel='plugins'], [data-panel='skills'], [data-panel='pets']")).toHaveLength(3);
+  expect(document.getElementById('skillsRefresh')!.querySelector('.ph-arrow-clockwise')).not.toBeNull();
   expect(css).toContain('@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important;');
 });
 
@@ -144,6 +145,14 @@ it('keeps the context circle in the gear group rather than an auto-placed compos
   expect(document.getElementById('contextMeterInfo')!.parentElement?.id).toBe('contextMeter');
   expect(document.getElementById('clearComposerMode')!.parentElement?.id).toBe('composerModeControl');
   expect(document.getElementById('composerSettingsSummary')!.contains(document.getElementById('clearComposerMode'))).toBe(false);
+});
+
+it('anchors the composer mode menu to the fixed icon slot instead of the variable-width mode pill', () => {
+  const popover = document.querySelector('#composerSettings .composer-popover');
+  expect(popover).not.toBeNull();
+  expect(rule('#composerSettings .composer-popover')).toContain('left: 18px');
+  expect(rule('#composerSettings .composer-popover')).toContain('translate: -50% 0');
+  expect(rule('#composerSettings .composer-popover')).not.toContain('left: 50%');
 });
 
 it('does not expose a periodic Astra continuation outside session_finish', () => {
