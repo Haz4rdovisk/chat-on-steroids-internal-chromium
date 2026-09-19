@@ -233,7 +233,7 @@ Paths in this section are repository-relative. Most mechanisms have `main`, `sha
 | Extension | `extension/{manifest.json,chatgpt-dom.js,content.js,fiber.js,background.js,usage.js,overlay.css,popup.html,popup.css,popup.js}`: injection worlds, native observations/actions, journal and UI. |
 | Models/usage | `src/main/chat-models.ts`, `session/usage.ts`; `src/shared/{chat-models,usage}.ts`; `src/renderer/{chat-models,context-meter,usage}.ts`: account observations vs local estimates. |
 | External plugins | `src/main/plugins/{catalog,installer,manager,exposure,oauth}.ts`, `plugins-ipc.ts`, `plugin-refresh.ts`, `src/shared/{plugins,plugin-refresh}.ts`, `src/renderer/plugins.ts`. |
-| Renderer boundary | `src/main/ipc.ts`, `edit-context-menu.ts`, `src/preload/index.ts`; `src/renderer/{main,chat,dom,tool-result,timeline-scroll,sidebar-resize,browser-preferences,connection-popover,i18n}.ts`, `locales/{es,zh-CN}.json`, `index.html`, `styles.css`. |
+| Renderer boundary | `src/main/{ipc,view-menu}.ts`, `edit-context-menu.ts`, `src/preload/{index,view-menu}.ts`; `src/renderer/{main,chat,dom,tool-result,timeline-scroll,sidebar-resize,browser-preferences,connection-popover,i18n,view-menu}.ts`, `locales/{es,zh-CN}.json`, `index.html`, `styles.css`, `view-menu.{html,css}`. |
 | Appearance | `src/shared/appearance.ts`, `src/main/appearance-schema.ts`, `src/renderer/appearance.ts`: bounded saved colors/typography, field-wise Settings merge, immediate semantic CSS projection. `window-layout.ts` shares native caption/backing colors. |
 | Desktop Pets | `src/main/{pet-library,pet-overlay}.ts`, `src/shared/{pets,pet-activity}.ts`, `src/preload/pet-overlay.ts`, `src/renderer/{pet-overlay,pet-machine,pet-choreography,pets,pet}.ts`: package validation, overlay host, task projection, animation and library controls. |
 | Native Desktop | `src/main/computer/{index,helper,browser-chords,windows-api,windows-capture,windows-apps,windows-keys}.ts`, `src/shared/windows-computer.ts`, `mcp/tools-desktop-{windows,macos}.ts`, `native/macos-desktop-helper/*`, `native/macos-desktop-addon/*`. |
@@ -2416,6 +2416,13 @@ measures actual animation wakes and process CPU with unchanged artwork.
 interface actions use the shared Phosphor glyph map in
 `renderer/dom.ts` and `renderer/icons.css`; keep the bespoke CoS mark, language flags and data
 visualizations distinct, but do not introduce a second ad-hoc action-icon family.
+The header View trigger opens a narrow local `WebContentsView` owned by `main/view-menu.ts`, not
+a renderer dropdown. Its isolated preload accepts only Pets, Sidebar and zoom commands; the
+mainstream menu has no ChatGPT-browser command. Every action glyph and visible state check uses
+the shared Phosphor map from `icons.css`; the menu must not grow a parallel inline-SVG icon set.
+A renderer snapshot supplies translated labels,
+current check states and the active Appearance palette/font settings. Native blur, a second
+trigger press and Escape close the menu without reopening it or changing shell geometry.
 Projects, workers, plans, model choice, usage and plugins have focused modules (§4). The renderer
 calls a fixed `preload/index.ts` allowlist into validated
 `ipc.ts`/`plugins-ipc.ts` handlers.

@@ -16,7 +16,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
-          'pet-overlay': resolve(__dirname, 'src/preload/pet-overlay.ts')
+          'pet-overlay': resolve(__dirname, 'src/preload/pet-overlay.ts'),
+          'view-menu': resolve(__dirname, 'src/preload/view-menu.ts')
         }
       }
     }
@@ -27,7 +28,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
-          'pet-overlay': resolve(__dirname, 'src/renderer/pet-overlay.html')
+          'pet-overlay': resolve(__dirname, 'src/renderer/pet-overlay.html'),
+          'view-menu': resolve(__dirname, 'src/renderer/view-menu.html')
         }
       }
     }

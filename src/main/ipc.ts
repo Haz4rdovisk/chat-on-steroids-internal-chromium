@@ -2,6 +2,7 @@ import { registerWorkspaceTerminalIpc } from './workspace-terminal-ipc.js';
 import { applyLoginStartup, supportsLoginStartup } from './window-lifecycle.js';
 import { appearanceSchema } from './appearance-schema.js';
 import { mergeAppearance } from '../shared/appearance.js';
+import type { ViewMenuToggleRequest } from '../shared/view-menu.js';
 import { prepareSessionPrompt, prepareSkillFollowup } from './session/prompt.js';
 import { importSkillFile, importSkillPackage, listManagedSkills, listSkills, removeSkill } from './skills.js';
 import { checkGitHubSkillUpdates, importGitHubSkill, linkGitHubSkill, updateGitHubSkill } from './skill-github.js';
@@ -124,6 +125,7 @@ import { forgetWorkspaceRoot, renameWorkspaceRoot } from './workspace.js';
 import { hostPlatformInfo } from './platform.js';
 import { openInPreferredBrowser } from './browser.js';
 import { markInstallOnQuit, onUpdateChange, updateStatus } from './update.js';
+import { toggleViewMenu } from './view-menu.js';
 import {
   getMacOSDesktopAccess,
   onMacOSDesktopAccessChange,
@@ -1081,6 +1083,34 @@ export function registerIpc(getWindow: () => BrowserWindow | null, quitToInstall
     const { factor } = z.object({ factor: z.number().min(0.75).max(1.5) }).parse(payload);
     getWindow()?.webContents.setZoomFactor(factor * UI_BASE_ZOOM);
     return factor;
+  });
+
+  handle('viewMenu:toggle', async payload => {
+    const request = z.object({
+      anchor: z.object({
+        x: z.number().finite().min(0).max(100_000),
+        y: z.number().finite().min(0).max(100_000),
+        width: z.number().finite().positive().max(10_000),
+        height: z.number().finite().positive().max(10_000)
+      }).strict(),
+      snapshot: z.object({
+        petVisible: z.boolean(),
+        petReady: z.boolean(),
+        sidebarCollapsed: z.boolean(),
+        zoomPercent: z.number().int().min(50).max(250),
+        theme: z.enum(['dark', 'light']),
+        appearance: appearanceSchema.optional(),
+        language: z.enum(['en', 'es', 'zh-CN', 'zh-TW']),
+        labels: z.object({
+          pet: z.string().min(1).max(80),
+          sidebar: z.string().min(1).max(80),
+          zoomIn: z.string().min(1).max(80),
+          zoomOut: z.string().min(1).max(80),
+          actualSize: z.string().min(1).max(80)
+        }).strict()
+      }).strict()
+    }).strict().parse(payload) as ViewMenuToggleRequest;
+    return toggleViewMenu(request);
   });
 
   handle('sessions:openChat', async (payload) => {
