@@ -1651,6 +1651,22 @@ function forgetTimelineRows(): void {
   rowCache.clear();
 }
 
+function toolMetric(value: string): HTMLElement {
+  const metric = el('span', 'metric');
+  const delta = /^(~?)(\+\d+)?(?:\s+)?([−-]\d+)?$/.exec(value);
+  if (!delta || (!delta[2] && !delta[3])) {
+    metric.textContent = value;
+    return metric;
+  }
+  if (delta[1]) metric.append(delta[1]);
+  if (delta[2]) metric.append(el('span', 'metric-added', delta[2]));
+  if (delta[3]) {
+    if (delta[2]) metric.append(' ');
+    metric.append(el('span', 'metric-removed', delta[3]));
+  }
+  return metric;
+}
+
 function toolBody(event: Extract<SessionEvent, { kind: 'tool_call' }>, context?: { id: string; current: () => boolean }): HTMLElement {
   const { call } = event;
   const summary = toolCallSummary(call);
@@ -1666,7 +1682,7 @@ function toolBody(event: Extract<SessionEvent, { kind: 'tool_call' }>, context?:
   head.append(icon(KIND_ICON[call.summary.kind] ?? 'i-bolt', 'ico tool-ico'));
   head.append(el('b', '', call.summary.title));
   if (call.summary.detail) head.append(el('em', '', call.summary.detail));
-  if (summary.metric) head.append(el('span', 'metric', summary.metric));
+  if (summary.metric) head.append(toolMetric(summary.metric));
   box.append(head);
 
   // Collapsed calls only need their headline. Large recorded results must not
@@ -1761,8 +1777,9 @@ function appendToolOutput(box: HTMLDetailsElement, { call }: Extract<SessionEven
     for (const change of call.changes) {
       const li = el('li');
       li.append(el('code', '', change.path));
-      const counts = `+${change.added} −${change.removed}${change.approximate ? t(" (approx.)") : ''}`;
-      li.append(el('span', 'metric', counts));
+      const counts = toolMetric(`+${change.added} −${change.removed}`);
+      if (change.approximate) counts.append(t(" (approx.)"));
+      li.append(counts);
       changes.append(li);
     }
     raw.append(changes);
