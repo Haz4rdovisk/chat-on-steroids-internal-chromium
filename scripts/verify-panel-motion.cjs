@@ -32,6 +32,7 @@ app.whenReady().then(async () => {
       vite.middlewares.use('/fixture.html', async (_, response) => {
         const source = fs.readFileSync(path.join(root, 'src/renderer/index.html'), 'utf8')
           .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace('</head>', '<link rel="stylesheet" href="/icons.css"></head>')
           .replace('</body>', '<script type="module">' + fixture + '</script></body>');
         response.setHeader('Content-Type', 'text/html');
         response.end(await vite.transformIndexHtml('/fixture.html', source));
@@ -46,6 +47,7 @@ app.whenReady().then(async () => {
     const js = code => win.webContents.executeJavaScript(code);
     for (let i = 0; i < 100 && !(await js('window.motionReady === true')); i++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(await js('window.motionReady'), true);
+    assert.equal(await js('document.fonts.ready.then(() => true)'), true);
     const measure = () => js(`(() => {
       const app=document.querySelector('.app');
       const cols=getComputedStyle(app).gridTemplateColumns.split(' ').map(parseFloat);
@@ -54,6 +56,20 @@ app.whenReady().then(async () => {
       return { sidebar: cols[1], browser: cols[0], files: work[1], terminal: rows[4] };
     })()`);
     const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const refreshMetrics = await js(`(() => {
+      const button = document.querySelector('#chatRefresh');
+      const icon = button.querySelector('.ico');
+      const buttonBounds = button.getBoundingClientRect();
+      const iconBounds = icon.getBoundingClientRect();
+      return {
+        button: [buttonBounds.width, buttonBounds.height],
+        icon: [iconBounds.width, iconBounds.height],
+        translate: getComputedStyle(icon, '::before').translate
+      };
+    })()`);
+    assert.ok(refreshMetrics.button.every(value => Math.abs(value - 26) < 0.1), JSON.stringify(refreshMetrics));
+    assert.ok(refreshMetrics.icon.every(value => Math.abs(value - 16) < 0.1), JSON.stringify(refreshMetrics));
+    assert.equal(refreshMetrics.translate, '-1px 2px');
     const phases = [
       ['sidebar', 'sidebar', 180], ['browser', 'browser', 320],
       ['files', 'files', 280], ['terminal', 'terminal', 130]
@@ -100,6 +116,9 @@ app.whenReady().then(async () => {
     }
     await js('window.motion.sidebar(true);window.motion.browser(true);window.motion.files(true);window.motion.terminal(true)');
     await wait(260);
+    const refreshPoint = await js(`(() => { const rect = document.querySelector('#chatRefresh').getBoundingClientRect(); return [rect.x + rect.width / 2, rect.y + rect.height / 2]; })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: refreshPoint[0], y: refreshPoint[1] });
+    await wait(50);
     fs.writeFileSync(path.join(output, 'open.png'), (await win.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
     console.log('Panel motion: four directions opened and closed with intermediate Chromium geometry.');
   } finally {
