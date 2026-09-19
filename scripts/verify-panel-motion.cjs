@@ -70,6 +70,52 @@ app.whenReady().then(async () => {
     assert.ok(refreshMetrics.button.every(value => Math.abs(value - 26) < 0.1), JSON.stringify(refreshMetrics));
     assert.ok(refreshMetrics.icon.every(value => Math.abs(value - 16) < 0.1), JSON.stringify(refreshMetrics));
     assert.equal(refreshMetrics.translate, '-1px 2px');
+    const modeMenuGeometry = await js(`(() => {
+      const details = document.querySelector('#composerSettings');
+      const summary = document.querySelector('#composerSettingsSummary');
+      const control = document.querySelector('#composerModeControl');
+      const label = document.querySelector('#composerModeLabel');
+      const clear = document.querySelector('#clearComposerMode');
+      const popover = details.querySelector('.composer-popover');
+      details.open = true;
+      return ['', 'Goal', 'Loop + Plan'].map(text => {
+        const active = text.length > 0;
+        summary.toggleAttribute('data-mode-active', active);
+        control.toggleAttribute('data-mode-active', active);
+        label.hidden = !active;
+        label.textContent = text;
+        clear.hidden = !active;
+        const detailsBounds = details.getBoundingClientRect();
+        const summaryBounds = summary.getBoundingClientRect();
+        const popoverBounds = popover.getBoundingClientRect();
+        return {
+          mode: text || 'Off',
+          triggerWidth: summaryBounds.width,
+          popoverLeft: popoverBounds.left,
+          popoverCenter: popoverBounds.left + popoverBounds.width / 2,
+          iconAnchor: detailsBounds.left + 18
+        };
+      });
+    })()`);
+    assert.ok(modeMenuGeometry[0].triggerWidth < modeMenuGeometry[1].triggerWidth, JSON.stringify(modeMenuGeometry));
+    assert.ok(modeMenuGeometry[1].triggerWidth < modeMenuGeometry[2].triggerWidth, JSON.stringify(modeMenuGeometry));
+    for (const state of modeMenuGeometry) {
+      assert.ok(Math.abs(state.popoverLeft - modeMenuGeometry[0].popoverLeft) < 0.1, JSON.stringify(modeMenuGeometry));
+      assert.ok(Math.abs(state.popoverCenter - state.iconAnchor) < 0.1, JSON.stringify(modeMenuGeometry));
+    }
+    await js(`(() => {
+      const details = document.querySelector('#composerSettings');
+      const summary = document.querySelector('#composerSettingsSummary');
+      const control = document.querySelector('#composerModeControl');
+      const label = document.querySelector('#composerModeLabel');
+      const clear = document.querySelector('#clearComposerMode');
+      details.open = false;
+      summary.removeAttribute('data-mode-active');
+      control.removeAttribute('data-mode-active');
+      label.hidden = true;
+      label.textContent = '';
+      clear.hidden = true;
+    })()`);
     const phases = [
       ['sidebar', 'sidebar', 180], ['browser', 'browser', 320],
       ['files', 'files', 280], ['terminal', 'terminal', 130]

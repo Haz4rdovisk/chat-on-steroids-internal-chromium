@@ -3388,7 +3388,7 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 .composer-mode-clear:disabled { opacity: .5; cursor: default; }
 #composerModeLabel { min-width: 0; overflow: hidden; font-size: calc(12px * var(--text-scale, 1)); font-weight: 560; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
 #composerModeLabel[hidden] { display: none; }
-#composerSettings .composer-popover { width: 280px; left: 50%; right: auto; translate: -50% 0; transform-origin: bottom center; max-height: min(520px, 70vh); overflow-y: auto; }
+#composerSettings .composer-popover { width: 280px; left: 18px; right: auto; translate: -50% 0; transform-origin: bottom center; max-height: min(520px, 70vh); overflow-y: auto; }
 #composerSettings #loopDeliveryRow { flex-direction: column; align-items: stretch; gap: 7px; padding: 12px 9px 6px; }
 #loopDeliveryRow select { width: 100%; max-width: 100%; padding: 9px 11px; border-radius: 9px; line-height: 1.4; }
 .automation-switch { display: flex; padding: 3px; gap: 3px; border-radius: 10px; background: var(--sunk); }
