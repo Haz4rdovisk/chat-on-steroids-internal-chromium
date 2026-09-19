@@ -45,14 +45,22 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 100 && !(await js('window.motionReady === true')); i++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(await js('window.motionReady'), true);
     assert.equal(await js('document.fonts.ready.then(() => true)'), true);
-    const measure = () => js(`(() => {
-      const app=document.querySelector('.app');
-      const cols=getComputedStyle(app).gridTemplateColumns.split(' ').map(parseFloat);
-      const rows=getComputedStyle(app).gridTemplateRows.split(' ').map(parseFloat);
-      const work=getComputedStyle(document.querySelector('[data-panel="chat"]')).gridTemplateColumns.split(' ').map(parseFloat);
-      return { sidebar: cols[0], files: work[1], terminal: rows[4] };
-    })()`);
+    assert.equal(await js("matchMedia('(prefers-reduced-motion: reduce)').matches"), false,
+      'motion acceptance requires a no-preference Chromium environment');
     const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const sampleMotion = (action, key, open) => js(`new Promise(resolve => {
+      const read = () => {
+        const app=document.querySelector('.app');
+        const cols=getComputedStyle(app).gridTemplateColumns.split(' ').map(parseFloat);
+        const rows=getComputedStyle(app).gridTemplateRows.split(' ').map(parseFloat);
+        const work=getComputedStyle(document.querySelector('[data-panel="chat"]')).gridTemplateColumns.split(' ').map(parseFloat);
+        return ({sidebar:cols[0],files:work[1],terminal:rows[4]})['${key}'];
+      };
+      const values=[], started=performance.now();
+      window.motion.${action}(${open});
+      const tick=()=>{values.push(read());if(performance.now()-started<280)requestAnimationFrame(tick);else resolve(values)};
+      requestAnimationFrame(tick);
+    })`);
     const refreshMetrics = await js(`(() => {
       const button = document.querySelector('#chatRefresh');
       const icon = button.querySelector('.ico');
@@ -119,16 +127,13 @@ app.whenReady().then(async () => {
     await js('window.motion.sidebar(false)');
     await wait(260);
     for (const [action, key, minimum] of phases) {
-      await js(`window.motion.${action}(true)`);
-      await wait(65);
-      const enteringGeometry = await measure();
-      const entering = enteringGeometry[key];
-      await wait(220);
-      const openedGeometry = await measure();
-      const opened = openedGeometry[key];
-      assert.ok(opened >= minimum, `${action} did not open: ${JSON.stringify({ enteringGeometry, openedGeometry })}`);
-      assert.ok(entering > 1 && entering < opened - 1, `${action} did not interpolate open: ${JSON.stringify({ entering, opened })}`);
+      const opening = await sampleMotion(action, key, true);
+      const opened = opening.at(-1);
+      const entering = opening.find(value => value > 1 && value < opened - 1);
+      assert.ok(opened >= minimum, `${action} did not open: ${JSON.stringify(opening)}`);
+      assert.notEqual(entering, undefined, `${action} did not interpolate open: ${JSON.stringify(opening)}`);
       if (action === 'sidebar') {
+        await js(`Promise.all(document.querySelector('.sidebar').getAnimations().map(animation => animation.finished.catch(() => undefined)))`);
         const exposure = await js(`(() => {
           const sidebar = document.querySelector('.sidebar');
           return {
@@ -141,14 +146,13 @@ app.whenReady().then(async () => {
         assert.ok(Number.isFinite(rightClip) && rightClip <= -(exposure.cornerWidth + 1),
           `the expanded sidebar clipped its rounded workspace corner: ${JSON.stringify(exposure)}`);
       }
-      await js(`window.motion.${action}(false)`);
-      await wait(65);
-      const exiting = (await measure())[key];
-      await wait(220);
-      const closed = (await measure())[key];
-      assert.ok(closed < 2, `${action} did not close: ${JSON.stringify({ exiting, closed })}`);
-      assert.ok(exiting > closed + 1 && exiting < opened - 1, `${action} did not interpolate closed: ${JSON.stringify({ exiting, closed })}`);
+      const closing = await sampleMotion(action, key, false);
+      const closed = closing.at(-1);
+      const exiting = closing.find(value => value > closed + 1 && value < opened - 1);
+      assert.ok(closed < 2, `${action} did not close: ${JSON.stringify(closing)}`);
+      assert.notEqual(exiting, undefined, `${action} did not interpolate closed: ${JSON.stringify(closing)}`);
       if (action === 'sidebar') {
+        await js(`Promise.all(document.querySelector('.sidebar').getAnimations().map(animation => animation.finished.catch(() => undefined)))`);
         const closedSidebar = await js(`(() => {
           const style = getComputedStyle(document.querySelector('.sidebar'));
           return { visibility: style.visibility, pointerEvents: style.pointerEvents };
