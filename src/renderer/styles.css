@@ -3775,6 +3775,7 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 .workspace-terminal[hidden] { display: none; }
 /* Logical hiding is immediate; keep the outgoing surface painted only for its short exit. */
 :is(.agent-panel, .file-panel, .workspace-terminal)[hidden].is-closing { display: flex !important; }
+.browser-dock[hidden].is-closing { display: grid !important; }
 @media (prefers-reduced-motion: reduce) {
   .app, [data-panel='chat'], .sidebar { transition: none !important; }
 }

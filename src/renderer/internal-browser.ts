@@ -1,4 +1,6 @@
 import type { InternalBrowserDockState } from '../shared/internal-browser.js';
+import { icon } from './dom.js';
+import { hideSlidingPanel, showSlidingPanel } from './panel-motion.js';
 
 /** Renderer-owned split layout; the remote ChatGPT page itself is a native WebContentsView. */
 export interface InternalBrowserDockController {
@@ -18,6 +20,8 @@ export function initInternalBrowserDock(): InternalBrowserDockController {
   const minimumWorkspace = 360;
   let preferred: number | null = null;
   let open = false;
+  let wantedOpen = false;
+  let pending = Promise.resolve();
   let drag: { id: number; x: number; width: number } | null = null;
   let frame = 0;
 
@@ -59,7 +63,7 @@ export function initInternalBrowserDock(): InternalBrowserDockController {
       close.className = 'browser-tab-close';
       close.dataset.closeTabId = String(tab.id);
       close.setAttribute('aria-label', `Close ${title.textContent}`);
-      close.textContent = '×';
+      close.append(icon('i-x'));
       row.append(title, close);
       fragment.append(row);
     }
@@ -79,7 +83,6 @@ export function initInternalBrowserDock(): InternalBrowserDockController {
 
   function paint(): void {
     app.classList.toggle('browser-dock-open', open);
-    dock.hidden = !open;
     dock.inert = !open;
     if (preferred === null) app.style.removeProperty('--browser-dock-width');
     else app.style.setProperty('--browser-dock-width', `${Math.min(maximum(), preferred)}px`);
@@ -89,7 +92,7 @@ export function initInternalBrowserDock(): InternalBrowserDockController {
   }
 
   function syncLayout(show = false): void {
-    if (!open) return;
+    if (!open || !wantedOpen) return;
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       frame = 0;
@@ -99,18 +102,26 @@ export function initInternalBrowserDock(): InternalBrowserDockController {
     });
   }
 
-  async function setOpen(next: boolean): Promise<void> {
-    if (open === next) { if (next) syncLayout(); return; }
-    if (!next) {
-      // Park the native view before collapsing its renderer slot, so it can never cover shell UI.
-      await window.api.internalBrowser({ action: 'hide' });
-      open = false;
+  function setOpen(next: boolean): Promise<void> {
+    wantedOpen = next;
+    if (!next) { cancelAnimationFrame(frame); frame = 0; }
+    pending = pending.catch(() => undefined).then(async () => {
+      if (open === wantedOpen) { if (open) syncLayout(); return; }
+      if (!wantedOpen) {
+        // The native view must be parked before its renderer track can move under shell UI.
+        await window.api.internalBrowser({ action: 'hide' });
+        if (wantedOpen) { syncLayout(true); return; }
+        open = false;
+        hideSlidingPanel(dock, 'left');
+        paint();
+        return;
+      }
+      open = true;
+      showSlidingPanel(dock, 'left', false);
       paint();
-      return;
-    }
-    open = true;
-    paint();
-    syncLayout(true);
+      syncLayout(true);
+    });
+    return pending;
   }
 
   function setWidth(width: number): void {
@@ -203,7 +214,7 @@ export function initInternalBrowserDock(): InternalBrowserDockController {
   });
 
   return {
-    toggle: () => setOpen(!open),
+    toggle: () => setOpen(!wantedOpen),
     isOpen: () => open
   };
 }

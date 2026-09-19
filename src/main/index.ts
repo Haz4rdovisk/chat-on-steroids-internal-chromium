@@ -441,7 +441,9 @@ void app.whenReady().then(async () => {
   try {
     await ensureInternalBrowserReady();
     await bridgeStartup;
-    await prewarmInternalBrowser();
+    void prewarmInternalBrowser().catch(error => {
+      logWarn(`internal browser prewarm: ${error instanceof Error ? error.message : String(error)}`);
+    });
   } catch (error) {
     logWarn(`internal browser startup: ${error instanceof Error ? error.message : String(error)}`);
   }

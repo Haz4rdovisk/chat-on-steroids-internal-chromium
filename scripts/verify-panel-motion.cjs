@@ -1,4 +1,4 @@
-// Isolated Chromium layout probe. No provider or project data.
+// Isolated Chromium layout probe. No provider, project data or native browser tab.
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,8 +15,11 @@ app.whenReady().then(async () => {
     const app=document.querySelector('.app'), chat=document.querySelector('[data-panel="chat"]');
     const file=document.createElement('aside'); file.className='file-panel'; file.hidden=true; chat.append(file);
     const terminal=document.createElement('section'); terminal.className='workspace-terminal'; terminal.hidden=true; app.append(terminal);
+    const browser=document.getElementById('browserDock');
     window.motion={
       sidebar(open){app.classList.toggle('is-sidebar-collapsed',!open)},
+      browser(open){if(open){showSlidingPanel(browser,'left',false);app.classList.add('browser-dock-open')}
+        else{hideSlidingPanel(browser,'left');app.classList.remove('browser-dock-open')}},
       files(open){if(open){showSlidingPanel(file,'right');chat.classList.add('has-file-panel')}
         else{hideSlidingPanel(file,'right');chat.classList.remove('has-file-panel')}},
       terminal(open){if(open){showSlidingPanel(terminal,'up');app.classList.add('has-terminal')}
@@ -48,11 +51,12 @@ app.whenReady().then(async () => {
       const cols=getComputedStyle(app).gridTemplateColumns.split(' ').map(parseFloat);
       const rows=getComputedStyle(app).gridTemplateRows.split(' ').map(parseFloat);
       const work=getComputedStyle(document.querySelector('[data-panel="chat"]')).gridTemplateColumns.split(' ').map(parseFloat);
-      return { sidebar: cols[0], files: work[1], terminal: rows[4] };
+      return { sidebar: cols[1], browser: cols[0], files: work[1], terminal: rows[4] };
     })()`);
     const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
     const phases = [
-      ['sidebar', 'sidebar', 180], ['files', 'files', 280], ['terminal', 'terminal', 130]
+      ['sidebar', 'sidebar', 180], ['browser', 'browser', 320],
+      ['files', 'files', 280], ['terminal', 'terminal', 130]
     ];
     await js('window.motion.sidebar(false)');
     await wait(260);
@@ -74,10 +78,10 @@ app.whenReady().then(async () => {
       assert.ok(closed < 2, `${action} did not close: ${JSON.stringify({ exiting, closed })}`);
       assert.ok(exiting > closed + 1 && exiting < opened - 1, `${action} did not interpolate closed: ${JSON.stringify({ exiting, closed })}`);
     }
-    await js('window.motion.sidebar(true);window.motion.files(true);window.motion.terminal(true)');
+    await js('window.motion.sidebar(true);window.motion.browser(true);window.motion.files(true);window.motion.terminal(true)');
     await wait(260);
     fs.writeFileSync(path.join(output, 'open.png'), (await win.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
-    console.log('Panel motion: three directions opened and closed with intermediate Chromium geometry.');
+    console.log('Panel motion: four directions opened and closed with intermediate Chromium geometry.');
   } finally {
     win?.destroy();
     await server.close();
