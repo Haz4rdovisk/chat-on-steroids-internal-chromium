@@ -3988,7 +3988,7 @@ export function initChat(next: Deps): void {
   agentToggle.append(icon('i-agent'));
   agentToggle.id = 'agentPanelToggle'; agentToggle.type = 'button'; agentToggle.hidden = true;
   ui(agentToggle, 'aria-label', () => t("Toggle sub-agent side panel")); agentToggle.setAttribute('aria-expanded', 'false');
-  $('headerConnect').after(fileToggle, agentToggle);
+  $('headerActions').prepend(fileToggle, agentToggle);
   const agentToolGroups = new Map<string, HTMLDetailsElement>();
   agentPanel = createAgentPanel({
     host: document.querySelector<HTMLElement>('[data-panel="chat"]')!, toggle: agentToggle,

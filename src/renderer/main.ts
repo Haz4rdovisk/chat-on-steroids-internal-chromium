@@ -229,6 +229,7 @@ document.addEventListener('keydown', (event) => {
 
 function initViewMenuControls(sidebarLayout: ReturnType<typeof initSidebarResize>): void {
   const trigger = $<HTMLButtonElement>('viewMenuToggle');
+  let togglePending = false;
   ui(trigger, 'aria-label', () => t('View'));
   ui(trigger, 'title', () => t('View'));
   const snapshot = () => {
@@ -253,13 +254,21 @@ function initViewMenuControls(sidebarLayout: ReturnType<typeof initSidebarResize
   };
 
   trigger.addEventListener('click', async () => {
+    if (togglePending) return;
+    togglePending = true;
+    trigger.setAttribute('aria-busy', 'true');
     const rect = trigger.getBoundingClientRect();
-    const reply = await api.toggleViewMenu({
-      anchor: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-      snapshot: snapshot()
-    });
-    if (!reply.ok) { toast(reply.error); return; }
-    trigger.setAttribute('aria-expanded', String(reply.data.open));
+    try {
+      const reply = await api.toggleViewMenu({
+        anchor: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        snapshot: snapshot()
+      });
+      if (!reply.ok) { toast(reply.error); return; }
+      trigger.setAttribute('aria-expanded', String(reply.data.open));
+    } finally {
+      togglePending = false;
+      trigger.removeAttribute('aria-busy');
+    }
   });
   api.onViewMenuOpenChanged(open => trigger.setAttribute('aria-expanded', String(open)));
   api.onViewMenuCommand(command => {
@@ -845,7 +854,8 @@ let announced = false;
  * bar is for what the user can act on - a version to fetch by hand, an extension to reload -
  * while the Activity line reports every state, including the good one.
  */
-function updateSummary({ bridge, update, config, status }: AppState): { text: string; tone: UpdateTone; notice: boolean; extensionAction: string | null } | null {
+function updateSummary(next: AppState): { text: string; tone: UpdateTone; notice: boolean; extensionAction: string | null } | null {
+  const { bridge, update, config } = next;
   // Only an extension older than this app is the user's to fix. The other direction is an app
   // that has not caught up yet - normal while an update downloads - and telling that user to
   // load the bundled folder again would talk them into downgrading a working extension. The
@@ -856,7 +866,9 @@ function updateSummary({ bridge, update, config, status }: AppState): { text: st
       : null;
   // A mismatched companion can fail the protocol gate before it becomes present.
   // Retain its last observed version until a matching companion actually reports in.
-  const missing = !stale && bridge.running && !bridge.present && isRunning(status.state) && browserExtensionRequired(config);
+  // Companion presence is independent of tunnel startup. Once Setup is ready, a failed
+  // connection attempt must not briefly show and then erase a still-valid reminder.
+  const missing = !stale && bridge.running && !bridge.present && !missingStep(next) && browserExtensionRequired(config);
   if (!stale && !missing && !update.latest && update.stage === 'idle' && !update.checkedAt) return null;
 
   const lines: string[] = [];
@@ -1032,14 +1044,15 @@ function apply(next: AppState): void {
   const appearanceUi = requestedSettings?.ui ?? config.ui;
   appearance.apply(appearanceUi);
 
-  const headerConnect = $<HTMLButtonElement>('headerConnect');
-  const wasVisible = !headerConnect.hidden;
-  headerConnect.hidden = connected;
-  headerConnect.disabled = busy;
-  ui(headerConnect, 'textContent', () => disconnecting ? t('Disconnecting…') : busy ? t('Connecting…') : t('Connect'));
-  if (connected && wasVisible && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) $('sidebarConnection').animate([
-    { boxShadow: '0 0 0 0 var(--green)' }, { boxShadow: '0 0 0 12px transparent' }
-  ], { duration: 850, iterations: 2 });
+  const sidebarConnect = $<HTMLButtonElement>('sidebarConnect');
+  const connectHadFocus = document.activeElement === sidebarConnect;
+  sidebarConnect.dataset.collapsed = String(connected);
+  sidebarConnect.disabled = connected || busy;
+  sidebarConnect.tabIndex = connected ? -1 : 0;
+  sidebarConnect.setAttribute('aria-hidden', String(connected));
+  sidebarConnect.title = !connected && missing ? missing.text : '';
+  ui(sidebarConnect, 'textContent', () => disconnecting ? t('Disconnecting…') : busy ? t('Connecting…') : t('Connect'));
+  if (connected && connectHadFocus) $('sidebarConnection').focus({ preventScroll: true });
 
   // ---- global connection surface
   const connectionTone = connected ? 'is-connected' : offline ? 'is-offline' : busy ? 'is-busy' : failed ? 'is-error' : '';
@@ -1056,10 +1069,10 @@ function apply(next: AppState): void {
         : t("No tunnel yet")
       : (status.publicUrl ?? status.localUrl ?? config.tunnel.kind));
 
-  const connectBtn = $<HTMLButtonElement>('connectionPopoverToggle');
-  ui(connectBtn, 'textContent', () => disconnecting ? t('Disconnecting…') : running ? t("Disconnect") : t("Connect"));
-  connectBtn.disabled = disconnecting || (!running && missing !== null);
-  connectBtn.title = !running && missing ? missing.text : '';
+  const disconnectBtn = $<HTMLButtonElement>('connectionPopoverDisconnect');
+  disconnectBtn.hidden = !connected;
+  disconnectBtn.disabled = !connected;
+  ui(disconnectBtn, 'textContent', () => t("Disconnect"));
 
   ui($('connectionPopoverExtension'), 'textContent', () => next.bridge.extensionVersion
     ? `v${next.bridge.extensionVersion}`
@@ -1168,7 +1181,7 @@ function apply(next: AppState): void {
 
   const wizConnect = $<HTMLButtonElement>('wizConnect');
   ui(wizConnect, 'textContent', () => disconnecting ? t('Disconnecting…') : running ? t("Disconnect") : t("Connect"));
-  wizConnect.disabled = connectBtn.disabled;
+  wizConnect.disabled = disconnecting || (!running && missing !== null);
   ui($('wizStatus'), 'textContent', () => running || failed || disconnecting ? status.detail || t(STATUS_TEXT[status.state]) : '');
 
   $('chatgptConn').replaceChildren(
@@ -1790,7 +1803,7 @@ function installUpdate(): void {
 
 $('updateInstall').addEventListener('click', installUpdate);
 $('installUpdate').addEventListener('click', installUpdate);
-$('headerConnect').addEventListener('click', async () => {
+$('sidebarConnect').addEventListener('click', async () => {
   if (!state) return;
   if (missingStep(state)) { showTab('setup'); return; }
   if (isRunning(state.status.state)) {
@@ -1798,7 +1811,12 @@ $('headerConnect').addEventListener('click', async () => {
   }
   const connected = await run(api.connect()); if (connected) apply(connected);
 });
-$('connectionPopoverToggle').addEventListener('click', () => void toggleConnection());
+$('connectionPopoverDisconnect').addEventListener('click', async () => {
+  if (!state || state.status.state !== 'connected') return;
+  setConnectionPopover(false);
+  const disconnected = await run(api.disconnect());
+  if (disconnected) apply(disconnected);
+});
 $('wizConnect').addEventListener('click', () => void toggleConnection());
 
 $('pickBinary').addEventListener('click', async () => {

@@ -121,6 +121,7 @@ export interface PetOverlayBounds {
 
 export interface PetOverlaySnapshot {
   visible: boolean;
+  dismissedPetIds: string[];
   level: PetActivityLevel;
   activities: PetActivity[];
   theme: 'light' | 'dark';

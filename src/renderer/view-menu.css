@@ -50,6 +50,16 @@ html:lang(zh), html:lang(zh-TW) body { letter-spacing: 0; }
   border-radius: var(--r-md);
   background: var(--card);
 }
+.view-menu-surface.is-opening { transform-origin: top left; animation: surface-in 140ms ease-out; }
+
+@keyframes surface-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-menu-surface.is-opening { animation: none; }
+}
 
 button {
   display: grid;

@@ -62,7 +62,10 @@ menu.className = 'pet-menu';
 menu.hidden = true;
 document.body.append(menu);
 
-function enabledPets(): PetRecord[] { return library.pets.filter(pet => pet.enabled); }
+function enabledPets(): PetRecord[] {
+  const dismissed = new Set(snapshot?.dismissedPetIds ?? []);
+  return library.pets.filter(pet => pet.enabled && !dismissed.has(pet.id));
+}
 function positionKey(id: string): string { return `cos.ui.petDesktop.${id}.v1`; }
 
 function clampPosition(next: { x: number; y: number }): { x: number; y: number } {
@@ -354,16 +357,27 @@ function menuButton(label: string, run: (view: PetView) => void): HTMLButtonElem
   return button;
 }
 
+function menuSeparator(): HTMLDivElement {
+  const separator = document.createElement('div');
+  separator.className = 'pet-menu-separator';
+  separator.setAttribute('aria-hidden', 'true');
+  return separator;
+}
+
 function openMenu(view: PetView, x: number, y: number): void {
   menuTargetId = view.record.id;
   menu.replaceChildren(
     menuButton('OpenAI → ClosedAI', target => { target.machine.startAction('openai'); }),
     menuButton('Anthropic → trash', target => { target.machine.startAction('anthropic'); }),
     menuButton('Reset position', target => { target.machine.reset(); persistPosition(target); paintView(target); }),
+    menuSeparator(),
+    menuButton('Hide pet', target => { api.hidePet(target.record.id); }),
     menuButton('Open pet library', () => api.openLibrary())
   );
   menu.hidden = false;
-  const width = 176, height = 132;
+  const rect = menu.getBoundingClientRect();
+  const width = rect.width || 176;
+  const height = rect.height || 174;
   menu.style.left = `${Math.max(8, Math.min(innerWidth - width - 8, x))}px`;
   menu.style.top = `${Math.max(8, Math.min(innerHeight - height - 8, y))}px`;
   setInteractive(true);
@@ -458,8 +472,9 @@ function updateInteraction(next: PetOverlayPointer): void {
 }
 
 function syncLibrary(): void {
-  if (disposed) return;
+  if (disposed || !snapshot) return;
   const active = new Map(enabledPets().map((pet, index) => [pet.id, { pet, index }]));
+  for (const id of loading.keys()) if (!active.has(id)) loading.delete(id);
   for (const [id, view] of views) {
     if (!active.has(id)) { disposeView(view); views.delete(id); }
   }
@@ -475,7 +490,7 @@ function syncLibrary(): void {
       if (disposed || loading.get(id) !== token) return;
       loading.delete(id);
       const current = library.pets.find(pet => pet.id === id);
-      if (!reply.ok || !current?.enabled || current.kind !== 'cos') return;
+      if (!reply.ok || !current?.enabled || current.kind !== 'cos' || !enabledPets().some(pet => pet.id === id)) return;
       views.set(id, createView(current, reply.data.atlasDataUrl, reply.data.manifest, item.index));
       renderBadges();
       updateInteraction(pointer);
@@ -498,6 +513,7 @@ function applySnapshot(next: PetOverlaySnapshot): void {
   const previous = snapshot?.level;
   snapshot = next;
   applyAppearance(next.theme, next.appearance);
+  syncLibrary();
   if (previous !== undefined && previous !== next.level) {
     for (const view of views.values()) {
       if (next.level === 'running') view.machine.react('spawn');

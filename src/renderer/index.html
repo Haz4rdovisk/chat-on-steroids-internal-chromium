@@ -76,8 +76,9 @@
         </section>
 
         <div class="sidebar-bottom">
-          <button class="btn" id="workspaceSettings" type="button"><i class="ico ph ph-gear-six" aria-hidden="true"></i>Settings</button>
+          <button class="btn" id="workspaceSettings" type="button" aria-label="Settings" title="Settings"><i class="ico ph ph-gear-six" aria-hidden="true"></i></button>
           <div class="connection-anchor">
+            <button class="sidebar-connect-action" id="sidebarConnect" type="button" data-collapsed="true" aria-hidden="true" tabindex="-1" disabled>Connect</button>
             <button
               class="sidebar-connection"
               id="sidebarConnection"
@@ -153,7 +154,7 @@
               <div class="connection-popover-actions">
                 <button class="btn connection-advanced-action" id="connectionAdvancedCopy" type="button">Copy</button>
                 <button class="btn connection-advanced-action" id="connectionAdvancedRefresh" type="button">Refresh</button>
-                <button class="btn btn-solid" id="connectionPopoverToggle" type="button">Connect</button>
+                <button class="btn btn-solid" id="connectionPopoverDisconnect" type="button" hidden>Disconnect</button>
               </div>
             </section>
           </div>
@@ -171,8 +172,7 @@
           Chat On Steroids
           <span id="headerSub">Not set up yet</span>
         </span>
-        <span class="state">
-          <button class="btn connect-prompt" id="headerConnect" type="button" hidden>Connect</button>
+        <span class="state" id="headerActions">
           <!-- Only ever visible with a downloaded, digest-checked update waiting. This app
                lives in the tray and is closed to it, so "installs the next time you start it"
                can mean days. This is the press that means now. -->

@@ -53,7 +53,9 @@ app.whenReady().then(async () => {
       const diag={capturedAt:Date.now(),status:{connected:true,paired:true,compatible:true,extensionVersion:'2.1.13',extensionProtocol:14,appProtocol:14},
         preferences:{overwrite:true,durations:false},tab:{tab:17,isChat:true,bound:true,recorder:true,conversationId:'fixture-chat',
         page:{events:2,session:'fixture-session',requestId:'fixture-request',trace:[{requestId:'fixture-request',read:true,sent:true,confirmed:true,app:'request_id',tool:'read'}]}}};
+      let stateListener=()=>{};
       window.api=new Proxy({getState:()=>ok(state),getLog:()=>ok([]),getZoom:()=>ok(1),listProjects:()=>ok(projects),
+        onStateChanged:fn=>{stateListener=fn;return ()=>{};},
         listSessions:()=>ok({sessions:rows,total:3,nextCursor:null,activeId:null,pressure:[],blocked:[]}),
         getSession:id=>ok({events:[{seq:1,time:1,source:'extension',kind:'user_message',messageId:'question',message:{text:'Review this project',chars:19,truncated:false}},
           {seq:2,time:2,source:'extension',kind:'assistant_message',messageId:'answer',final:true,state:'final',message:{text:'The project workspace is ready for inspection.',chars:47,truncated:false}}],total:2,nextFrom:3}),
@@ -73,7 +75,11 @@ app.whenReady().then(async () => {
       await import('/main.ts');
       const {setLanguage,t}=await import('/i18n.ts');
       const {EditorView}=await import('@codemirror/view');
-      window.fixture={setLanguage,t,readyConnection(){state.hasApiKey=true;config.tunnel.tunnelId='tunnel_'+'1'.repeat(32);},edit(text){const view=EditorView.findFromDOM(document.querySelector('.file-preview .cm-editor'));
+      window.fixture={setLanguage,t,readyConnection(){state.hasApiKey=true;config.tunnel.tunnelId='tunnel_'+'1'.repeat(32);stateListener(structuredClone(state));},
+        companion(present){state.bridge.present=present;state.bridge.extensionVersion=present?state.update.current:null;stateListener(structuredClone(state));},
+        connectionState(value){state.status.state=value;stateListener(structuredClone(state));},
+        tunnelFailed(){state.status.state='tunnel-unavailable';state.status.detail='tunnel-client was not found';stateListener(structuredClone(state));},
+        edit(text){const view=EditorView.findFromDOM(document.querySelector('.file-preview .cm-editor'));
         if(!view)throw new Error('Editor not ready');view.dispatch({changes:{from:0,to:view.state.doc.length,insert:text}});}};
       window.fixtureReady=true;
     `;
@@ -226,8 +232,47 @@ app.whenReady().then(async () => {
     assert.ok(await js(`(()=>{const n=document.getElementById('composerAddSkill'),r=n.getBoundingClientRect();return r.width>0&&r.height>0&&n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})()`));
     await js(`document.getElementById('composerAddSkill').click()`);
     assert.ok(await js('document.getElementById("chatInput").value.startsWith("Please add the following skills to my COS skills:")'));
-    await js(`window.fixture.readyConnection();document.getElementById('headerConnect').click()`);
-    await until('document.getElementById("headerConnect").hidden && document.getElementById("sidebarConnection").classList.contains("is-connected")');
+    const footer = await js(`(() => {
+      const action = document.getElementById('sidebarConnect').getBoundingClientRect();
+      const status = document.getElementById('sidebarConnection').getBoundingClientRect();
+      const sidebar = document.getElementById('sidebar').getBoundingClientRect();
+      return { action: action.toJSON(), status: status.toJSON(), sidebar: sidebar.toJSON(),
+        headerConnect: !!document.getElementById('headerConnect') };
+    })()`);
+    assert.equal(footer.headerConnect, false);
+    assert.ok(footer.action.width > 60 && Math.abs(footer.status.width - 36) < 1 && footer.status.right <= footer.sidebar.right, JSON.stringify(footer));
+    await screenshot('connection-footer-disconnected');
+    await js(`window.fixture.connectionState('starting-server');new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
+    const connectingFooter = await js(`(() => {
+      const action = document.getElementById('sidebarConnect');
+      const bounds = action.getBoundingClientRect();
+      return { width: bounds.width, fits: action.scrollWidth <= action.clientWidth, label: action.textContent };
+    })()`);
+    assert.ok(Math.abs(connectingFooter.width - footer.action.width) < 1 && connectingFooter.fits, JSON.stringify({ footer, connectingFooter }));
+    await screenshot('connection-footer-connecting');
+    await js(`window.fixture.connectionState('disconnected')`);
+    win.setSize(820,740); win.webContents.setZoomFactor(1.17);
+    await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    const narrowFooter = await js(`(() => {
+      const action = document.getElementById('sidebarConnect').getBoundingClientRect();
+      const status = document.getElementById('sidebarConnection').getBoundingClientRect();
+      const sidebar = document.getElementById('sidebar').getBoundingClientRect();
+      return { action: action.toJSON(), status: status.toJSON(), sidebar: sidebar.toJSON(), overflow: document.documentElement.scrollWidth > innerWidth };
+    })()`);
+    assert.ok(!narrowFooter.overflow && narrowFooter.action.left >= narrowFooter.sidebar.left && narrowFooter.status.right <= narrowFooter.sidebar.right, JSON.stringify(narrowFooter));
+    await screenshot('connection-footer-narrow');
+    win.setSize(1500,1000); win.webContents.setZoomFactor(1.17);
+    await js(`window.fixture.readyConnection();document.getElementById('sidebarConnect').click()`);
+    await until('document.getElementById("sidebarConnect").dataset.collapsed === "true" && document.getElementById("sidebarConnection").classList.contains("is-connected")');
+    await screenshot('connection-footer-connected');
+    await js('window.fixture.companion(false)');
+    assert.equal(await js('document.getElementById("updateNotice").hidden'), false);
+    await js('window.fixture.tunnelFailed()');
+    assert.equal(await js('document.getElementById("updateNotice").hidden'), false);
+    assert.equal(await js('document.getElementById("updateExtension").hidden'), false);
+    await screenshot('connection-extension-missing-tunnel-failed');
+    await js('window.fixture.companion(true)');
+    assert.equal(await js('document.getElementById("updateNotice").hidden'), true);
     const errors=await js('window.fixtureErrors');
     assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({renderer:'current source in Chromium; synthetic backend',results,save:true,draftRoundTrip:true,pdf:true,diagnostics:bounds,skillsDraftRoundTrip:true,sharedLibrary:true,sidebar:true,composer,errors},null,2));

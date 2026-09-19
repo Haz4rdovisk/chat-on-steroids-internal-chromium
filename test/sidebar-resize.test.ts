@@ -39,7 +39,7 @@ it('bounds dragging, releases capture, preserves width through collapse and smal
   dom.window.dispatchEvent(new dom.window.Event('resize'));
   expect(app.style.getPropertyValue('--sidebar-width')).toBe('480px');
   handle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home' }));
-  expect(app.style.getPropertyValue('--sidebar-width')).toBe('180px');
+  expect(app.style.getPropertyValue('--sidebar-width')).toBe('220px');
   handle.dispatchEvent(new dom.window.MouseEvent('dblclick'));
   expect(app.style.getPropertyValue('--sidebar-width')).toBe('');
   controller.toggle();

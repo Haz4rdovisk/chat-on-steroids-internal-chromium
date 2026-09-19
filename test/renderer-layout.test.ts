@@ -181,8 +181,12 @@ describe('the session card header', () => {
   it('keeps global connection status out of the chat header and in the sidebar footer', () => {
     const header = document.querySelector('#chatTitle')!.closest('header')!;
     const connection = document.getElementById('sidebarConnection')!;
+    const connect = document.getElementById('sidebarConnect')!;
     const footer = connection.closest('.sidebar-bottom')!;
     expect(header.contains(connection)).toBe(false);
+    expect(header.querySelector('#headerConnect')).toBeNull();
+    expect(document.getElementById('headerActions')).toBe(header.querySelector('.state'));
+    expect(connect.parentElement).toBe(connection.parentElement);
     expect(footer).not.toBeNull();
     expect([...footer.children].map((node) => (node as HTMLElement).id || (node as HTMLElement).className)).toEqual([
       'workspaceSettings',
@@ -191,11 +195,31 @@ describe('the session card header', () => {
     expect(document.getElementById('connectionPopover')!.closest('.connection-anchor')).not.toBeNull();
     expect(rule('.connection-popover')).toContain('position: fixed');
     expect(rule('.connection-popover')).toContain('max-height: min(580px, calc(100vh - 70px))');
+    expect(rule('.connection-popover:not([hidden])')).toContain('animation: surface-in 140ms ease-out');
     expect(rule('.connection-popover::-webkit-scrollbar-track')).toContain('margin-block: 10px');
-    expect(rule('#workspaceSettings')).toContain('height: 36px');
+    expect(rule('#workspaceSettings')).toContain('flex: 0 0 36px');
+    expect(rule('#workspaceSettings')).toContain('place-items: center');
+    expect(rule('#workspaceSettings')).toContain('justify-content: center');
+    expect(rule('#workspaceSettings')).toContain('border: 0');
+    expect(rule('#workspaceSettings')).toContain('background: transparent');
+    expect(rule('#workspaceSettings:hover')).toContain('background: transparent');
+    expect(rule('#workspaceSettings.is-sel')).toContain('background: var(--hover)');
+    expect(rule('#workspaceSettings .ico')).toContain('font-size: 22px');
+    expect(document.getElementById('workspaceSettings')!.textContent?.trim()).toBe('');
+    expect(document.getElementById('workspaceSettings')!.getAttribute('aria-label')).toBe('Settings');
     expect(rule('.sidebar-connection')).toContain('width: 36px; height: 36px');
+    expect(rule('.connection-anchor')).toContain('margin-left: auto');
+    expect(rule('.sidebar-connect-action')).toContain('height: 36px');
+    expect(rule('.sidebar-connect-action:not(:disabled)')).toContain('background: var(--green-wash)');
+    expect(rule(".connection-anchor:has(.sidebar-connect-action[data-collapsed='false'])")).toContain('112px');
+    expect(css).not.toContain('.connection-anchor:has(.sidebar-connection.is-busy)');
     expect(document.getElementById('connectionAdvanced')).not.toBeNull();
+    expect(rule('.connection-advanced > summary')).toContain('margin-top: 8px');
+    expect(rule('.connection-advanced[open] > .connection-advanced-body')).toContain('animation: surface-in 140ms ease-out');
     expect(document.getElementById('connectionAdvancedGrid')).not.toBeNull();
+    expect(document.getElementById('connectionPopoverDisconnect')).not.toBeNull();
+    expect(rule('#connectionPopoverDisconnect')).toContain('background: var(--red-wash)');
+    expect(document.getElementById('connectionPopoverToggle')).toBeNull();
     expect(document.getElementById('sessionControls')!.closest('#composerSettings')).not.toBeNull();
     expect(header.querySelector('.session-controls')).toBeNull();
   });

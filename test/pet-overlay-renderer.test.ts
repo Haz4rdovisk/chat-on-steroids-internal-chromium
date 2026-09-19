@@ -69,16 +69,16 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
     { id: 'willow', displayName: 'Willow', description: '', kind: 'cos', enabled: true, favorite: true }
   ] };
   let snapshotListener: ((snapshot: PetOverlaySnapshot) => void) | null = null;
-  let libraryListener: ((state: PetLibraryState) => void) | null = null;
   let pointerListener: ((point: PetOverlayPointer) => void) | null = null;
   let boundsListener: ((bounds: PetOverlayBounds) => void) | null = null;
   const setInteractive = vi.fn(), focusOwner = vi.fn(), openActivity = vi.fn(), openLibrary = vi.fn();
+  const hidePet = vi.fn();
   const petApi = {
     listPets: () => ok(library),
     petAsset: (id: string) => ok({ id, kind: 'cos' as const, atlasDataUrl: 'data:image/png;base64,YXRsYXM=', manifest: authoredManifest }),
-    setInteractive, focusOwner, openLibrary, openActivity,
+    hidePet, setInteractive, focusOwner, openLibrary, openActivity,
     onSnapshot: (listener: (snapshot: PetOverlaySnapshot) => void) => { snapshotListener = listener; return vi.fn(); },
-    onLibraryChanged: (listener: (state: PetLibraryState) => void) => { libraryListener = listener; return vi.fn(); },
+    onLibraryChanged: () => vi.fn(),
     onPointer: (listener: (point: PetOverlayPointer) => void) => { pointerListener = listener; return vi.fn(); },
     onBounds: (listener: (bounds: PetOverlayBounds) => void) => { boundsListener = listener; return vi.fn(); }
   };
@@ -86,8 +86,8 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
   await import('../src/renderer/pet-overlay.js');
   await flushOverlay();
   boundsListener!({ width: 1000, height: 800, scaleFactor: 1 });
-  snapshotListener!({
-    visible: true, level: 'running',
+  const runningSnapshot: PetOverlaySnapshot = {
+    visible: true, dismissedPetIds: [], level: 'running',
     activities: [{ id: 'task-1', title: 'Prime', body: 'Working', level: 'running', sessionId: 'session-one' }],
     theme: 'dark',
     appearance: {
@@ -95,7 +95,8 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
       dark: { background: '#181818', sidebar: '#1a2129', accent: '#b0cbed', contrast: 60 },
       font: 'system', fontSize: 14, translucentSidebar: true
     }
-  });
+  };
+  snapshotListener!(runningSnapshot);
   await Promise.resolve(); await Promise.resolve();
 
   const shells = [...dom.window.document.querySelectorAll<HTMLElement>('.pet-shell')];
@@ -121,7 +122,8 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
   tur.dispatchEvent(new dom.window.MouseEvent('contextmenu', { clientX: 220, clientY: 180, bubbles: true }));
   const menuButtons = [...dom.window.document.querySelectorAll<HTMLButtonElement>('.pet-menu button')];
   expect(menuButtons.map(button => button.textContent)).toContain('OpenAI → ClosedAI');
-  menuButtons[0]!.click();
+  expect(menuButtons.map(button => button.textContent)).toContain('Hide pet');
+  menuButtons.find(button => button.textContent === 'OpenAI → ClosedAI')!.click();
   expect(tur.dataset.action).toBe('openai');
   expect(tur.dataset.state).toBe('walk');
   expect(dom.window.document.querySelector('.pet-target')?.textContent).toBe('OpenAI');
@@ -145,23 +147,46 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
   expect(tur.dataset.state).toBe('poke');
   expect(focusOwner).toHaveBeenCalledOnce();
 
-  libraryListener!({ pets: library.pets.map(pet => pet.id === 'willow' ? { ...pet, enabled: false } : pet) });
+  const willow = dom.window.document.querySelector<HTMLElement>('.pet-shell[data-pet-id="willow"]')!;
+  willow.dispatchEvent(new dom.window.MouseEvent('contextmenu', { clientX: 320, clientY: 280, bubbles: true }));
+  const hide = [...dom.window.document.querySelectorAll<HTMLButtonElement>('.pet-menu button')]
+    .find(button => button.textContent === 'Hide pet')!;
+  hide.click();
+  expect(hidePet).toHaveBeenCalledWith('willow');
+  snapshotListener!({ ...runningSnapshot, dismissedPetIds: ['willow'] });
   expect(dom.window.document.querySelectorAll('.pet-shell')).toHaveLength(1);
+  expect(tur.querySelector<HTMLButtonElement>('.pet-badge')?.hidden).toBe(false);
+  expect(library.pets.every(pet => pet.enabled)).toBe(true);
+  snapshotListener!(runningSnapshot);
+  await flushOverlay();
+  expect(dom.window.document.querySelectorAll('.pet-shell')).toHaveLength(2);
+  expect(dom.window.document.querySelector<HTMLButtonElement>('.pet-shell[data-pet-id="willow"] .pet-badge')?.hidden).toBe(false);
 });
 
 it('sleeps between authored deadlines and uses display frames only for continuous motion', async () => {
   const library: PetLibraryState = { pets: [
     { id: 'tur-tur-sahur', displayName: 'Tur Tur Sahur', description: '', kind: 'builtin', builtin: true, enabled: true, favorite: true }
   ] };
+  let snapshotListener: ((snapshot: PetOverlaySnapshot) => void) | null = null;
   const petApi = {
     listPets: () => ok(library),
     petAsset: () => Promise.resolve({ ok: false as const, error: 'not used' }),
-    setInteractive: vi.fn(), focusOwner: vi.fn(), openLibrary: vi.fn(), openActivity: vi.fn(),
-    onSnapshot: () => vi.fn(), onLibraryChanged: () => vi.fn(), onPointer: () => vi.fn(), onBounds: () => vi.fn()
+    hidePet: vi.fn(), setInteractive: vi.fn(), focusOwner: vi.fn(), openLibrary: vi.fn(), openActivity: vi.fn(),
+    onSnapshot: (listener: (snapshot: PetOverlaySnapshot) => void) => { snapshotListener = listener; return vi.fn(); },
+    onLibraryChanged: () => vi.fn(), onPointer: () => vi.fn(), onBounds: () => vi.fn()
   };
   Object.defineProperty(dom.window, 'petApi', { configurable: true, value: petApi });
   await import('../src/renderer/pet-overlay.js');
   await flushOverlay();
+
+  snapshotListener!({
+    visible: true, dismissedPetIds: [], level: 'idle', activities: [], theme: 'dark',
+    appearance: {
+      light: { background: '#f4f4f5', sidebar: '#e9edf2', accent: '#486f9d', contrast: 45 },
+      dark: { background: '#181818', sidebar: '#1a2129', accent: '#b0cbed', contrast: 60 },
+      font: 'system', fontSize: 14, translucentSidebar: true
+    }
+  });
 
   expect(dom.window.document.querySelectorAll('.pet-shell')).toHaveLength(1);
   expect(rafCallbacks.size).toBe(0);

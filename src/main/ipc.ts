@@ -471,10 +471,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null, quitToInstall
   handle('pets:enabled', async payload => {
     const { id, enabled } = z.object({ id: z.string().min(1).max(100), enabled: z.boolean() }).strict().parse(payload);
     const state = setPetEnabled(id, enabled);
-    // "Enable" in the library is an explicit request to make that pet present. The View menu
-    // can still hide all pets afterwards, but a previously hidden global overlay must not make
-    // a freshly enabled pet appear broken.
-    if (enabled) await setPetOverlayVisible(true);
+    // Enable makes the overlay visible, but does not restore other pets dismissed for this run.
+    // View > Desktop pets is the explicit restore-all action.
+    if (enabled) await setPetOverlayVisible(true, false);
     return state;
   });
   handle('pets:favorite', async payload => {

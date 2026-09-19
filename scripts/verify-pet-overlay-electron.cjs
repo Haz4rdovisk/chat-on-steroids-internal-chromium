@@ -102,7 +102,7 @@ app.on('browser-window-created', (_event, win) => {
         console.log(JSON.stringify({ userData, shot, zoom: win.webContents.getZoomFactor(), geometry,
           alphaBounds: maxX < 0 ? null : { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } }, null, 2));
         win.webContents.send('pet-overlay:snapshot', {
-          visible: true, level: 'running',
+          visible: true, dismissedPetIds: [], level: 'running',
           activities: [{ id: 'task-smoke', title: 'Prime', body: 'Working', level: 'running', sessionId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }],
           theme: 'dark',
           appearance: {
@@ -131,7 +131,7 @@ app.on('browser-window-created', (_event, win) => {
         fs.writeFileSync(path.join(userData, 'task-strip.png'), (await win.webContents.capturePage()).toPNG());
         console.log(`task=${JSON.stringify(task)}`);
         win.webContents.send('pet-overlay:snapshot', {
-          visible: true, level: 'running',
+          visible: true, dismissedPetIds: [], level: 'running',
           activities: Array.from({ length: 8 }, (_, index) => ({
             id: `task-smoke-${index}`, title: `Worker ${index + 1}`, body: 'Working', level: 'running',
             sessionId: `aaaaaaaa-bbbb-cccc-dddd-${String(index).padStart(12, '0')}`
@@ -204,6 +204,55 @@ app.on('browser-window-created', (_event, win) => {
         assert.equal(await owner.webContents.executeJavaScript('document.querySelector(".app")?.dataset.screen'), screenBeforeClick,
           'A pet click must preserve the current CoS screen.');
         console.log(`petClickRestoredOwner=true; screen=${screenBeforeClick}`);
+        const contextMenu = await win.webContents.executeJavaScript(`(() => {
+          const shell = document.querySelector('.pet-shell');
+          const rect = shell.getBoundingClientRect();
+          shell.dispatchEvent(new MouseEvent('contextmenu', {
+            clientX: rect.right - 4,
+            clientY: rect.bottom - 4,
+            bubbles: true
+          }));
+          const menu = document.querySelector('.pet-menu');
+          const menuRect = menu.getBoundingClientRect();
+          return {
+            labels: [...menu.querySelectorAll('button')].map(button => button.textContent),
+            rect: menuRect.toJSON(),
+            viewport: { width: innerWidth, height: innerHeight }
+          };
+        })()`);
+        assert.ok(contextMenu.labels.includes('Hide pet'), `The pet context menu must offer Hide pet: ${JSON.stringify(contextMenu)}`);
+        assert.ok(contextMenu.rect.left >= 0 && contextMenu.rect.top >= 0
+          && contextMenu.rect.right <= contextMenu.viewport.width && contextMenu.rect.bottom <= contextMenu.viewport.height,
+        `The expanded pet menu must stay inside the work area: ${JSON.stringify(contextMenu)}`);
+        await win.webContents.executeJavaScript(`(() => {
+          const hide = [...document.querySelectorAll('.pet-menu button')].find(button => button.textContent === 'Hide pet');
+          if (!hide) throw new Error('Hide pet action is missing.');
+          hide.click();
+        })()`);
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const hidden = await owner.webContents.executeJavaScript(`Promise.all([
+          window.api.petsList(),
+          window.api.petsOverlayState()
+        ])`);
+        assert.equal(hidden[0].ok, true);
+        assert.equal(hidden[0].data.pets.find(pet => pet.id === 'tur-tur-sahur')?.enabled, true,
+          'Hide pet must leave the clicked library member Active.');
+        assert.equal(hidden[1].ok, true);
+        assert.equal(hidden[1].data.visible, false);
+        assert.equal(hidden[1].data.ready, true);
+        assert.equal(hidden[1].data.activeCount, 1,
+          'Hiding the final visible pet must keep its enabled membership.');
+        assert.equal(win.isVisible(), false, 'The overlay window must hide when all active pets are dismissed.');
+        const restored = await owner.webContents.executeJavaScript('window.api.petsSetOverlayVisible(true)');
+        assert.equal(restored.ok, true);
+        assert.equal(restored.data.visible, true);
+        assert.equal(restored.data.activeCount, 1);
+        assert.equal(win.isVisible(), true, 'The View visibility command must restore a dismissed active pet.');
+        assert.equal(await win.webContents.executeJavaScript('document.querySelectorAll(".pet-shell").length'), 1);
+        const restoredRect = await win.webContents.executeJavaScript('document.querySelector(".pet-shell").getBoundingClientRect().toJSON()');
+        assert.ok(Math.abs(restoredRect.x - 333) < 2 && Math.abs(restoredRect.y - 444) < 2,
+          `Restoring a dismissed pet must retain its position: ${JSON.stringify(restoredRect)}`);
+        console.log(`petContextHide=${JSON.stringify({ menu: contextMenu, hidden: hidden[1].data, restored: restored.data })}`);
         owner.minimize();
         clearTimeout(timeout);
         if (process.argv.includes('--hold')) {

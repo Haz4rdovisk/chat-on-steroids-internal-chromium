@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
       popup.classList.add('is-connected');
       popup.style.left = '100px';
       $('connectionPopoverTitle').textContent = 'Connected';
-      $('connectionPopoverToggle').textContent = 'Disconnect';
+      $('connectionPopoverDisconnect').hidden = false;
       $('connectionPopoverConnector').textContent = 'waiting';
       $('connectionPopoverBrowser').textContent = 'Connected';
       for (const row of document.querySelectorAll('.connection-popover-row')) row.dataset.tone = 'ok';
