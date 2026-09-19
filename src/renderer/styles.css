@@ -599,6 +599,7 @@ code {
 .connection-popover:has(.connection-advanced[open]) .connection-popover-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #connectionPopoverDisconnect { border: 1px solid var(--red-line); background: var(--red-wash); color: var(--red); }
 #connectionPopoverDisconnect:hover:not(:disabled) { border-color: var(--red); background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+#connectionPopoverDisconnect:disabled { opacity: .55; border-color: transparent; background: transparent; color: var(--faint); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ------------------------------------------------------------------ header */

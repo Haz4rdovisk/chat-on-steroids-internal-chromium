@@ -2870,9 +2870,10 @@ state retains the shared navigation highlight. The connection control stays pinn
 right edge. Sidebar resizing stops at 220 pixels so the expanded connection control remains inside
 the footer padding. Connect routes to Setup when
 configuration is incomplete. Focus moves to the square if connection completes while Connect
-is focused, and reduced-motion settings suppress the morph. The popover offers Disconnect only
-while connected and closes before disconnection begins; it never duplicates Connect or displays
-the pending Disconnecting phase. Connect, Connecting and Disconnecting share one expanded geometry
+is focused, and reduced-motion settings suppress the morph. The popover keeps Disconnect in a
+stable footer slot: it is neutral and disabled until a confirmed connection, then receives the
+danger treatment and closes the popover before disconnection begins. It never duplicates Connect
+or displays the pending Disconnecting phase. Connect, Connecting and Disconnecting share one expanded geometry
 in the footer so a phase label never triggers a second resize. Compact diagnostics and the expanded
 Advanced content use the composer's short surface reveal; Connect carries the success wash and
 Disconnect the danger wash without replacing their text labels. The View menu has its own foreground
