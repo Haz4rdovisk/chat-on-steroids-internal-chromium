@@ -56,6 +56,7 @@ app.whenReady().then(async () => {
       const bounds = node => { const box = node.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width }; };
       const rect = selector => bounds(document.querySelector(selector));
       const view = document.querySelector('[data-view="settings"]');
+      const panel = document.querySelector('[data-panel="chat"]');
       const scroll = document.getElementById('chatBody');
       const headers = [...view.querySelectorAll('.automation-section-head')];
       return {
@@ -70,6 +71,10 @@ app.whenReady().then(async () => {
           return { pet: [pet.height, pet.borderRadius, pet.backgroundColor, pet.borderColor], settings: [settings.height, settings.borderRadius, settings.backgroundColor, settings.borderColor] };
         })(),
         maxWidth: getComputedStyle(view).maxWidth,
+        motion: {
+          panel: [getComputedStyle(panel).animationName, getComputedStyle(panel).animationDuration],
+          view: [getComputedStyle(view).animationName, getComputedStyle(view).animationDuration]
+        },
         cardBackground: getComputedStyle(view.querySelector('.pane')).backgroundColor,
         pageBackground: getComputedStyle(view).backgroundColor,
         sections: headers.map(header => ({ heading: header.querySelector('h2').textContent, description: header.querySelector('p')?.textContent.trim(), header: bounds(header), card: bounds(header.nextElementSibling) })),
@@ -92,6 +97,7 @@ app.whenReady().then(async () => {
     if (width === 1400) assert.equal(result.view.width, 940, JSON.stringify(result));
     else assert.ok(result.view.width < 940, JSON.stringify(result));
     assert.equal(result.maxWidth, '940px', JSON.stringify(result));
+    assert.deepEqual(result.motion, { panel: ['none', '0s'], view: ['surface-in', '0.16s'] }, JSON.stringify(result));
     assert.equal(result.sections.length, 7, JSON.stringify(result));
     assert.ok(result.sections.every(section => section.description), JSON.stringify(result));
     assert.deepEqual(result.searchStyle.settings, result.searchStyle.pet, JSON.stringify(result));
