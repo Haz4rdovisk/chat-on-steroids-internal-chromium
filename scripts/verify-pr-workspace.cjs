@@ -60,7 +60,9 @@ app.whenReady().then(async () => {
         getSwarm:()=>ok({running:false,runId:null,agents:[],maxWorkers:2,pendingReports:0}),getChatModels:()=>ok({state:'unknown',models:[]}),
         skillLibrary:()=>ok({skills:[personal,projectSkill],roots:[],errors:[],includeInstructions:true}),
         listSkills:()=>ok([personal]),listInputs:()=>ok([]),getSessionPlan:()=>ok(null),browserPreferences:()=>ok({overwrite:true,durations:false}),
-        companionDiagnostics:()=>ok(diag),internalBrowser:undefined,
+        companionDiagnostics:()=>ok(diag),internalBrowser:()=>ok({open:false,ready:true,tabId:17,tabs:[
+          {id:17,active:true,status:'complete',title:'Fixture chat',url:'https://chatgpt.com/c/fixture-chat'}
+        ]}),
         listProjectFiles:(id,directory='')=>ok({projectId:id,projectName:'Demo workspace',directory,truncated:false,
           entries:['README.md','example.ts','preview.pdf'].map(name=>({name,path:name,kind:'file',bytes:files[name]?.length??${pdf.length}}))}),
         watchProjectFiles:()=>ok(true),previewProjectFile:(id,name)=>ok(info(id,name)),
@@ -114,9 +116,16 @@ app.whenReady().then(async () => {
     await until('document.querySelectorAll(".file-tree-row[data-path]").length>=3');
     await js(`document.querySelector('.file-tree-row[data-path="README.md"]').click()`);
     await until('!!document.querySelector(".file-preview-markdown h1")');
+    await js(`document.getAnimations().forEach(animation => {
+      if (animation.effect.getTiming().iterations !== Infinity) animation.finish();
+    })`);
     for (const [width, height, zoom, language] of [[1500,1000,1.17,'en'],[1100,850,1,'es'],[820,740,1.17,'es'],[1100,850,1.17,'zh-TW']]) {
       win.setSize(width,height); win.webContents.setZoomFactor(zoom);
-      await js(`window.fixture.setLanguage(${JSON.stringify(language)}); new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
+      await js(`window.fixture.setLanguage(${JSON.stringify(language)});
+        document.getAnimations().forEach(animation => {
+          if (animation.effect.getTiming().iterations !== Infinity) animation.finish();
+        });
+        new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
       const measured = await js(`(()=>{const r=document.querySelector('.file-panel').getBoundingClientRect();return {
         fits:r.left>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1,width:r.width,height:r.height,
         title:document.querySelector('.file-panel').getAttribute('aria-label'),overflow:document.documentElement.scrollWidth>innerWidth};})()`);
@@ -194,14 +203,14 @@ app.whenReady().then(async () => {
     await js(`document.documentElement.dataset.translucentSidebar='true';document.getElementById('sidebarConnection').click()`);
     assert.equal(await js('document.getElementById("connectionAdvanced").open'),false);
     assert.equal(await js('document.getElementById("connectionPopoverSettings")'),null);
-    assert.equal(await js('document.getElementById("connectionAdvancedOverwrite")'),null);
+    assert.equal(await js('document.getElementById("connectionAdvancedOverwrite").checkVisibility()'),false);
     await js(`document.getElementById('connectionAdvanced').open=true;document.getElementById('connectionRuntime').open=true;document.getElementById('sidebarConnection').click();document.getElementById('sidebarConnection').click()`);
     assert.equal(await js('document.getElementById("connectionAdvanced").open || document.getElementById("connectionRuntime").open'),false);
     await screenshot('connection-compact');
-    await js(`document.getElementById('sidebarConnection').click();document.getElementById('viewMenu').open=true`);
-    assert.ok(await js(`(()=>{const n=document.getElementById('zoomIn'),r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})()`));
-    await screenshot('view-menu');
-    await js(`document.getElementById('viewMenu').open=false;document.querySelector('[data-tab=appearance]').click();window.fixture.setLanguage('en')`);
+    await js(`document.getElementById('sidebarConnection').click()`);
+    assert.ok(await js(`(()=>{const n=document.getElementById('viewMenuToggle'),r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))&&!document.getElementById('viewMenu')})()`));
+    await screenshot('view-menu-trigger');
+    await js(`document.querySelector('[data-tab=appearance]').click();window.fixture.setLanguage('en')`);
     const heights=await js(`['appearanceFont','appearanceSize','setupProfile'].map(id=>{const n=document.getElementById(id).closest('.setting');return n.getBoundingClientRect().height})`);
     assert.ok(Math.max(...heights)-Math.min(...heights)<2,JSON.stringify(heights));
     await screenshot('appearance-aligned');
@@ -210,7 +219,7 @@ app.whenReady().then(async () => {
     assert.equal(setup.display,'grid'); await screenshot('setup-spanish-aligned');
     await js(`document.getElementById('backToChat').click();const input=document.getElementById('chatInput');input.value='/';input.setSelectionRange(1,1);input.dispatchEvent(new Event('input',{bubbles:true}));`);
     await until('!document.getElementById("skillPicker").hidden && document.querySelector(".skill-choice")');
-    assert.equal(await js('document.getElementById("sidebarSkills")'),null);
+    assert.equal(await js('!!document.querySelector("#sidebarSkills .ph-cube")'),true);
     assert.equal(await js('document.querySelector(".skill-add")'),null);
     await screenshot('slash-commands-skills');
     await js(`document.getElementById('composerAddSkill').closest('details').open=true`);
@@ -226,4 +235,3 @@ app.whenReady().then(async () => {
   } finally { win?.destroy(); await server?.close(); }
   app.exit(0);
 }).catch(error=>{console.error(error);app.exit(1)});
-
