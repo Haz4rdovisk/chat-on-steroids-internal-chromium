@@ -118,6 +118,15 @@ it('uses one centered vector geometry for animated disclosure and dropdown indic
   expect(css).toContain(':where(.plugin-about, .plugin-legal, .setup-optional, .session-diagnostics, .connection-runtime)[open] > summary .details-chevron { transform: rotate(90deg); }');
 });
 
+it('optically centers the Chats refresh glyph inside its hover target', () => {
+  const refresh = document.getElementById('chatRefresh')!;
+  expect(refresh.getAttribute('aria-label')).toBe('Refresh chats');
+  expect(refresh.querySelector('.ph-arrow-clockwise')).not.toBeNull();
+  expect(rule('.sidebar-session-heading .acts .btn')).toContain('width: 26px; height: 26px');
+  expect(rule('#chatRefresh .ico')).toContain('width: 16px; height: 16px; font-size: 16px');
+  expect(rule('#chatRefresh .ico::before')).toContain('translate: -1px 2px');
+});
+
 it('limits the existing tool-detail preference to handoff briefs', () => {
   const toggle = document.getElementById('goalIncludeToolCalls') as HTMLInputElement;
   expect(toggle.type).toBe('checkbox');
