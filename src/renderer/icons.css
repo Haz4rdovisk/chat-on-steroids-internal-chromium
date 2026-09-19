@@ -61,6 +61,7 @@
 .ph.ph-globe-hemisphere-west::before { content: '\e28c'; }
 .ph.ph-house::before { content: '\e2c2'; }
 .ph.ph-image::before { content: '\e2ca'; }
+.ph.ph-info::before { content: '\e2ce'; }
 .ph.ph-key::before { content: '\e2d6'; }
 .ph.ph-lightning::before { content: '\e2de'; }
 .ph.ph-list-checks::before { content: '\eadc'; }
