@@ -1579,6 +1579,13 @@ it('projects slash-selected Goal, Loop and Plan state on the compact composer op
   expect(clear.hidden).toBe(false);
   expect(clear.getAttribute('aria-label')).toBe('Clear Plan');
   expect(icon.classList.contains('ph-list-checks')).toBe(true);
+  await choose('goal');
+  expect(label.textContent).toBe('Goal + Plan');
+  expect(clear.getAttribute('aria-label')).toBe('Clear Goal + Plan');
+  expect(summary.getAttribute('aria-label')).toBe('Chat options: Goal and Plan selected');
+  await choose('loop');
+  expect(label.textContent).toBe('Loop + Plan');
+  expect(summary.getAttribute('aria-label')).toBe('Chat options: Loop and Plan selected');
   clear.click();
   expect(label.hidden).toBe(true);
   await choose('goal');
@@ -1602,6 +1609,41 @@ it('projects slash-selected Goal, Loop and Plan state on the compact composer op
   expect(clear.hidden).toBe(true);
   expect(summary.getAttribute('aria-label')).toBe('Chat options');
   expect(icon.classList.contains('ph-gear-six')).toBe(true);
+});
+
+it.each(['goal', 'loop'] as const)('delivers Plan and %s together after selecting Plan first', async automation => {
+  const { w, live } = await boot([], false);
+  const api = (w as any).api;
+  api.skillLibrary = vi.fn(async () => ({ ok: true, data: { skills: [], roots: [], errors: [], includeInstructions: true } }));
+  api.draftTaskPlan = vi.fn(async () => ({ ok: true, data: ['Implement the complete change', 'Verify the result'] }));
+  const input = w.document.getElementById('chatInput') as HTMLTextAreaElement;
+  const form = w.document.getElementById('composer')!;
+
+  w.document.getElementById('createPlan')!.click();
+  input.value = `/${automation}`;
+  input.setSelectionRange(input.value.length, input.value.length);
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await settle();
+  w.document.querySelector<HTMLButtonElement>(`.skill-choice[title="/${automation}"]`)!.click();
+  await settle();
+  expect(w.document.getElementById('composerModeLabel')!.textContent).toBe(`${automation === 'goal' ? 'Goal' : 'Loop'} + Plan`);
+
+  input.value = 'Implement the requested feature safely';
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  expect(api.draftTaskPlan).toHaveBeenCalledWith('Implement the requested feature safely', expect.any(String), expect.any(String));
+
+  form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  expect(live.sent).toHaveLength(1);
+  expect(live.sent[0]).toMatchObject({
+    text: 'Implement the complete change',
+    objective: 'Implement the requested feature safely',
+    stages: ['Verify the result'],
+    authoredSource: 'objective',
+    automation
+  });
 });
 
 it('clears Goal, Loop and combined modes through their real session controls', async () => {

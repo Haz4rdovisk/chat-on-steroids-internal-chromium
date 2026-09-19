@@ -1,6 +1,6 @@
 import { createWorkspaceTerminal } from './workspace-terminal.js';
 import { ui, t } from './i18n.js';
-import { initSkills } from './skills.js';
+import { COMPOSER_COMMAND_PROJECTION, initSkills } from './skills.js';
 import { imageStorageButton } from './image-storage.js';
 import { applyChatModels, applyComposerSessionModel, initChatModels, confirmedComposerModel, ensureComposerModel } from './chat-models.js';
 import { marked, Marked } from 'marked';
@@ -4265,10 +4265,13 @@ export function initChat(next: Deps): void {
     for (const menu of composerMenus) if (!menu.contains(event.target as Node) || ((event.target as HTMLElement).closest('button') && !(event.target as HTMLElement).closest('[data-keep-menu]'))) menu.open = false;
   });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') for (const menu of composerMenus) menu.open = false; });
-  $('chatInput').addEventListener('input', () => {
+  $('chatInput').addEventListener('input', event => {
+    const commandProjection = (event as unknown as { detail?: unknown }).detail === COMPOSER_COMMAND_PROJECTION;
     const hasText = !!authoredComposerText().trim();
     const plan = taskPlans.get(draftKey());
-    if (plan && !plan.stages && (plan.requestId || !hasText)) {
+    // Consuming /goal or /loop changes control state, not the authored Plan task.
+    // Real edits retain the existing cancellation contract, including an explicit clear.
+    if (!commandProjection && plan && !plan.stages && (plan.requestId || !hasText)) {
       cancelTaskPlan();
       if (hasText) taskPlans.set(draftKey(), { text: '', requestId: null, stages: null, sending: false, progress: null, error: null });
     }
