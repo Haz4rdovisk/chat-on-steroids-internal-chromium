@@ -2601,6 +2601,11 @@ input[readonly] {
   color: var(--soft);
 }
 
+/* Let the hover surface breathe beyond the text column without moving its content. */
+.ev-tool_call .tool {
+  margin-inline: -10px;
+}
+
 /* An open call is a surface of its own, so the arguments and the result read as
    belonging to the row that was clicked rather than to the timeline around it. */
 .tool[open] {
@@ -2624,6 +2629,10 @@ input[readonly] {
   font-size: calc(12.5px * var(--text-scale, 1));
   cursor: pointer;
   list-style: none;
+}
+
+.ev-tool_call .tool > summary {
+  padding-inline: 10px;
 }
 
 .tool > summary::-webkit-details-marker {
@@ -2677,6 +2686,14 @@ input[readonly] {
 }
 
 .tool.tone-bad .metric {
+  color: var(--red);
+}
+
+.tool .metric .metric-added {
+  color: var(--green);
+}
+
+.tool .metric .metric-removed {
   color: var(--red);
 }
 
