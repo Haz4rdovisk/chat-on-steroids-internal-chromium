@@ -14,4 +14,4 @@ Validation completed for this synchronization block:
 - six automatic-Continue timing cases passed in isolation
 - `npx electron scripts/verify-panel-motion.cjs` measured intermediate Chromium geometry in all four panel directions
 
-The first full `npm run verify` was intentionally retained as evidence rather than treated as success: it exposed obsolete external-Chrome fixtures and load-sensitive timing failures. The fixtures were repaired at their browser ownership boundary; a final full gate follows this worklog update.
+The first full `npm run verify` was intentionally retained as evidence rather than treated as success: it exposed obsolete external-Chrome fixtures and load-sensitive timing failures. The fixtures were repaired at their browser ownership boundary. The repeated full suite then passed 5,335 tests with 44 intentional skips; its only two failures were load-sensitive cases that both passed immediately in isolation (the real PowerShell `Select-Object -First` process probe and a fake-clock silence-window test). The separately gated `test/mcp-shutdown.test.ts` passed all 6 tests.
