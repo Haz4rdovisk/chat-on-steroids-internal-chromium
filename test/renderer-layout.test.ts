@@ -219,6 +219,7 @@ describe('the session card header', () => {
     expect(document.getElementById('connectionAdvancedGrid')).not.toBeNull();
     expect(document.getElementById('connectionPopoverDisconnect')).not.toBeNull();
     expect(rule('#connectionPopoverDisconnect')).toContain('background: var(--red-wash)');
+    expect(rule('#connectionPopoverDisconnect:disabled')).toContain('background: transparent');
     expect(document.getElementById('connectionPopoverToggle')).toBeNull();
     expect(document.getElementById('sessionControls')!.closest('#composerSettings')).not.toBeNull();
     expect(header.querySelector('.session-controls')).toBeNull();

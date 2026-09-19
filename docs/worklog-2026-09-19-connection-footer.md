@@ -90,3 +90,11 @@ the popover's Disconnect action uses the matching red wash and retains its expli
 After this follow-up, both repos passed typecheck, production build, the real-Chromium compact
 popover/disconnect/workspace fixtures, and the focused renderer suites (94/94 mainstream and
 95/95 Internal). Impeccable reported only pre-existing findings outside this footer change.
+
+## Follow-up: stable Disconnect slot
+
+Hiding Disconnect while offline left the compact popover with a changing footer and the expanded
+three-column action row with an empty final cell. Disconnect now remains in that final slot in
+every connection state. It is neutral and disabled while unavailable, then receives the existing
+red danger treatment only after a confirmed connection. The action and asynchronous disconnect
+authority are unchanged.

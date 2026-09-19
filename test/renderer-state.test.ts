@@ -533,7 +533,8 @@ it('moves Connect into the sidebar control and preserves status diagnostics afte
   expect(action.dataset.collapsed).toBe('false');
   expect(action.disabled).toBe(false);
   expect(action.textContent).toBe('Connect');
-  expect(disconnectAction.hidden).toBe(true);
+  expect(disconnectAction.hidden).toBe(false);
+  expect(disconnectAction.disabled).toBe(true);
   action.focus(); action.click(); await settle();
   expect(connect).toHaveBeenCalledOnce();
   expect(action.dataset.collapsed).toBe('true');
@@ -542,6 +543,7 @@ it('moves Connect into the sidebar control and preserves status diagnostics afte
   expect(doc.activeElement).toBe(status);
   expect(status.classList.contains('is-connected')).toBe(true);
   expect(disconnectAction.hidden).toBe(false);
+  expect(disconnectAction.disabled).toBe(false);
 
   status.click();
   expect(popover.hidden).toBe(false);
@@ -552,7 +554,8 @@ it('moves Connect into the sidebar control and preserves status diagnostics afte
   expect(action.dataset.collapsed).toBe('false');
   expect(action.getAttribute('aria-hidden')).toBe('false');
   expect(action.disabled).toBe(false);
-  expect(disconnectAction.hidden).toBe(true);
+  expect(disconnectAction.hidden).toBe(false);
+  expect(disconnectAction.disabled).toBe(true);
 });
 
 it('routes an unconfigured Connect action to Setup without attempting a connection', async () => {

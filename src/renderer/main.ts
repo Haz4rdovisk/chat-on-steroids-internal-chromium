@@ -1077,7 +1077,6 @@ function apply(next: AppState): void {
       : (status.publicUrl ?? status.localUrl ?? config.tunnel.kind));
 
   const disconnectBtn = $<HTMLButtonElement>('connectionPopoverDisconnect');
-  disconnectBtn.hidden = !connected;
   disconnectBtn.disabled = !connected;
   ui(disconnectBtn, 'textContent', () => t("Disconnect"));
 
