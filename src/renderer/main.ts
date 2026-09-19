@@ -250,7 +250,7 @@ function initViewMenuControls(
       language: currentLanguage(),
       labels: {
         browser: t('ChatGPT browser'),
-        pet: t('Desktop pet'),
+        pet: t('Desktop pets'),
         sidebar: t('Toggle Sidebar'),
         zoomIn: t('Zoom In'),
         zoomOut: t('Zoom Out'),

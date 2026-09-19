@@ -1672,6 +1672,12 @@ authority, document election and provider hydration are separate decisions. The 
 the host as a resizable **right-side split** using the current shell tokens/panel language; the
 sidebar remains the left visual anchor. Do not restore the fork's old left-dock layout.
 
+Connection Advanced queries the optional Internal-browser dock state concurrently with companion
+diagnostics. The active hosted tab is the browser-host source; recorder/request detail is used only
+when the companion snapshot names that same tab. A live hosted ChatGPT tab with no matching
+snapshot is visibly pending, not absent and not borrowed from another companion tab. Mainstream's
+external-browser build intentionally has no such adapter.
+
 ### Overwrite and recovery presentation
 
 Overwrite preserves native ChatGPT answer DOM, Markdown, code, citations and action controls.
@@ -2449,6 +2455,9 @@ measures actual animation wakes and process CPU with unchanged artwork.
 interface actions use the shared Phosphor glyph map in
 `renderer/dom.ts` and `renderer/icons.css`; keep the bespoke CoS mark, language flags and data
 visualizations distinct, but do not introduce a second ad-hoc action-icon family.
+The foreground View menu follows that same map for Pets, Sidebar, zoom and state checks; only the
+ChatGPT brand mark is bespoke. Its renderer files retain the approved lab contract while Browser
+remains the first Internal-only row.
 `renderer/internal-browser.ts` owns only the shell split/tab-strip projection for native hosted
 `WebContentsView`s. Projects, workers, plans, model choice, usage and plugins have focused modules
 (§4). The renderer calls a fixed `preload/index.ts` allowlist into validated

@@ -174,6 +174,12 @@ async function ensureMenuView(): Promise<WebContentsView> {
     }
   })();
   await loadPromise;
+  // Fonts are part of the menu's visual contract. Wait for Phosphor to load and for two
+  // compositor frames before the native view becomes visible; otherwise the first capture can
+  // paint labels while the icon glyph layer is still empty.
+  await view.webContents.executeJavaScript(
+    'document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))'
+  );
   return view;
 }
 

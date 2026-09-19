@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { JSDOM } from 'jsdom';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => {
@@ -16,6 +18,7 @@ const fake = vi.hoisted(() => {
     setWindowOpenHandler = vi.fn();
     loadFile = vi.fn(async () => undefined);
     loadURL = vi.fn(async () => undefined);
+    executeJavaScript = vi.fn(async () => undefined);
     on(name: string, listener: Listener): this {
       const bucket = this.listeners.get(name) ?? new Set<Listener>();
       bucket.add(listener);
@@ -112,7 +115,7 @@ function snapshot() {
     },
     labels: {
       browser: 'ChatGPT browser',
-      pet: 'Desktop pet',
+      pet: 'Desktop pets',
       sidebar: 'Toggle Sidebar',
       zoomIn: 'Zoom In',
       zoomOut: 'Zoom Out',
@@ -124,6 +127,21 @@ function snapshot() {
 afterEach(async () => {
   await menu.shutdownViewMenu();
   fake.reset();
+});
+
+it('keeps the lab-approved Phosphor icon contract for every shared menu action', () => {
+  const html = readFileSync(new URL('../src/renderer/view-menu.html', import.meta.url), 'utf8');
+  const document = new JSDOM(html).window.document;
+  expect([...document.querySelectorAll<HTMLButtonElement>('[data-command]')].map(button => button.dataset.command))
+    .toEqual(['browser', 'pet', 'sidebar', 'zoom-in', 'zoom-out', 'zoom-reset']);
+  expect(document.querySelector('#viewBrowser .chatgpt-mark')).not.toBeNull();
+  expect(document.querySelector('#viewPet .ph-paw-print')).not.toBeNull();
+  expect(document.querySelector('#viewSidebar .ph-sidebar-simple')).not.toBeNull();
+  expect(document.querySelector('#viewZoomIn .ph-magnifying-glass-plus')).not.toBeNull();
+  expect(document.querySelector('#viewZoomOut .ph-magnifying-glass-minus')).not.toBeNull();
+  expect(document.querySelector('#viewActualSize .ph-corners-out')).not.toBeNull();
+  expect(document.querySelectorAll('.menu-check.ph-check')).toHaveLength(3);
+  expect(document.querySelectorAll('.view-menu-surface svg')).toHaveLength(1);
 });
 
 it('renders above native browser views and remains inside the owner window', async () => {

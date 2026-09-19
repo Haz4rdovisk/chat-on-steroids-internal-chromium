@@ -2,6 +2,34 @@ import type { CompanionDiagnostics, CompanionTraceEntry } from '../shared/types.
 import { $, toast } from './dom.js';
 import { t, ui } from './i18n.js';
 
+interface InternalBrowserTabState {
+  id: number;
+  active: boolean;
+  status: 'loading' | 'complete';
+  title: string;
+  url: string;
+}
+
+interface InternalBrowserDockState {
+  open: boolean;
+  ready: boolean;
+  tabId: number | null;
+  tabs: InternalBrowserTabState[];
+}
+
+type InternalBrowserReply =
+  | { ok: true; data: InternalBrowserDockState | null }
+  | { ok: false; error: string };
+
+function queryInternalBrowser(): Promise<InternalBrowserReply> {
+  const optional = window.api as typeof window.api & {
+    internalBrowser?: (request: { action: 'query' }) => Promise<InternalBrowserReply>;
+  };
+  return typeof optional.internalBrowser === 'function'
+    ? optional.internalBrowser({ action: 'query' })
+    : Promise.resolve({ ok: true, data: null });
+}
+
 type CaptureState = 'ok' | 'bad' | 'wait' | 'off';
 type StageState = 'done' | 'failed' | 'running' | 'off';
 type Stage = [StageState, string?];
@@ -29,10 +57,35 @@ function ageToken(at: number): string {
   return `${Math.round(seconds / 3600)}h`;
 }
 
-function paintDiagnosticAge(diagnostics: CompanionDiagnostics | null): void {
-  $('connectionAdvancedAge').textContent = diagnostics
-    ? t('Companion · updated {0} ago', [ageToken(diagnostics.capturedAt)])
-    : t('No runtime diagnostics yet');
+function isChatGptUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.origin === 'https://chatgpt.com' || url.origin === 'https://chat.openai.com';
+  } catch { return false; }
+}
+
+function conversationFromUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const match = /^\/c\/([^/?#]+)/.exec(new URL(value).pathname);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch { return null; }
+}
+
+function activeInternalTab(host: InternalBrowserDockState | null): InternalBrowserTabState | null {
+  if (!host) return null;
+  return host.tabs.find((tab) => tab.id === host.tabId) ?? host.tabs.find((tab) => tab.active) ?? null;
+}
+
+function paintDiagnosticAge(host: InternalBrowserDockState | null, diagnostics: CompanionDiagnostics | null): void {
+  $('connectionAdvancedAge').textContent = host?.ready
+    ? diagnostics
+      ? t('Internal Chromium · companion {0} ago', [ageToken(diagnostics.capturedAt)])
+      : t('Internal Chromium · companion pending')
+    : diagnostics
+      ? t('Companion · updated {0} ago', [ageToken(diagnostics.capturedAt)])
+      : t('No runtime diagnostics yet');
 }
 
 function captureRow(id: string, state: CaptureState, meta: string, copyValue: string | null = null): void {
@@ -200,15 +253,23 @@ function detail(list: HTMLElement, term: string, value: string | number | null, 
   list.append(dt, dd);
 }
 
-function paintDiagnostics(diagnostics: CompanionDiagnostics | null): void {
-  const info = diagnostics?.tab ?? null;
+function paintDiagnostics(
+  host: InternalBrowserDockState | null,
+  diagnostics: CompanionDiagnostics | null
+): void {
+  const hostTab = activeInternalTab(host);
+  const internal = host?.ready === true;
+  const hostIsChat = isChatGptUrl(hostTab?.url);
+  const companionTab = diagnostics?.tab ?? null;
+  const companionMatchesHost = !hostTab || companionTab?.tab === hostTab.id;
+  const info = companionMatchesHost ? companionTab : null;
   const page = info?.page;
   const sent = info?.delivery;
-  const isChat = info?.isChat === true;
-  const chatId = info?.conversationId ?? null;
+  const isChat = internal ? hostIsChat : info?.isChat === true;
+  const chatId = info?.conversationId ?? conversationFromUrl(hostTab?.url);
   const requestId = page?.requestId ?? null;
 
-  paintDiagnosticAge(diagnostics);
+  paintDiagnosticAge(host, diagnostics);
 
   const status = diagnostics?.status ?? null;
   const incompatible = Boolean(status?.connected && status.compatible === false);
@@ -223,28 +284,33 @@ function paintDiagnostics(diagnostics: CompanionDiagnostics | null): void {
   captureRow(
     'connectionAdvancedTab',
     isChat ? 'ok' : 'off',
-    !isChat ? 'none open' : info?.tab ? `#${info.tab}` : ''
+    !isChat ? 'none open' : hostTab ? `#${hostTab.id} · ${hostTab.status}` : ''
   );
   captureRow(
     'connectionAdvancedRecording',
-    !isChat ? 'off' : info?.recorder ? 'ok' : 'bad',
+    !isChat ? 'off' : info?.recorder ? 'ok' : internal ? 'wait' : 'bad',
     !isChat
       ? ''
       : info?.recorder
         ? (page?.generating ? 'answering' : '')
-        : 'reload'
+        : internal
+          ? companionTab && !companionMatchesHost ? 'syncing tab' : 'companion pending'
+          : 'reload'
   );
   captureRow('connectionAdvancedChat', !isChat ? 'off' : chatId ? 'ok' : 'wait', !isChat ? '' : chatId ? shorten(chatId, 8) : 'new chat', chatId);
   captureRow('connectionAdvancedRequest', !isChat ? 'off' : requestId ? 'ok' : 'wait', !isChat ? '' : requestId ? shorten(requestId, 9) : 'none yet', requestId);
 
-  const flow = diagnostics
-    ? pipeline(diagnostics)
+  const scopedDiagnostics = diagnostics && companionMatchesHost ? diagnostics : null;
+  const flow = scopedDiagnostics
+    ? pipeline(scopedDiagnostics)
     : isChat
       ? {
           read: ['running'] as Stage,
           sent: ['off'] as Stage,
           owner: ['off'] as Stage,
-          why: t('Waiting for companion diagnostics.'),
+          why: internal
+            ? t('Internal Chromium is live. Waiting for the companion recorder snapshot for this tab.')
+            : t('Waiting for companion diagnostics.'),
           bad: false
         }
       : { read: ['off'] as Stage, sent: ['off'] as Stage, owner: ['off'] as Stage, why: '', bad: false };
@@ -252,7 +318,7 @@ function paintDiagnostics(diagnostics: CompanionDiagnostics | null): void {
   captureRow(
     'connectionAdvancedApp',
     !isChat ? 'off' : flow.bad ? 'bad' : flowing ? 'ok' : 'wait',
-    !isChat ? '' : flow.bad ? 'blocked' : flowing ? 'tool matched' : flow.owner[0] === 'done' ? 'ID confirmed' : 'waiting'
+    !isChat ? '' : flow.bad ? 'blocked' : flowing ? 'tool matched' : flow.owner[0] === 'done' ? 'ID confirmed' : internal && !info ? 'companion pending' : 'waiting'
   );
   stage('connectionPipelineRead', flow.read);
   stage('connectionPipelineSent', flow.sent);
@@ -263,16 +329,16 @@ function paintDiagnostics(diagnostics: CompanionDiagnostics | null): void {
 
   const grid = $('connectionAdvancedGrid');
   grid.replaceChildren();
-  detail(grid, 'browser host', 'companion browser');
-  detail(grid, 'active tab', info?.tab ?? null);
-  detail(grid, 'browser tabs', info ? `${info.chatTabs} ChatGPT` : null);
+  detail(grid, 'browser host', internal ? 'Internal Chromium · ready' : 'companion browser');
+  detail(grid, 'active tab', hostTab ? `#${hostTab.id} · ${hostTab.status}` : info?.tab ?? null);
+  detail(grid, 'browser tabs', host ? `${host.tabs.length} open · dock ${host.open ? 'shown' : 'hidden'}` : info ? `${info.chatTabs} ChatGPT` : null);
   detail(grid, 'app', status ? `v${status.appVersion || '?'} · port ${status.port || '—'}` : null);
   detail(grid, 'extension', status ? `v${status.extensionVersion || '?'} · protocol ${status.extensionProtocol ?? '—'}` : null, status?.compatible === false);
   detail(grid, 'chat id', chatId);
   detail(grid, 'app session', page?.session ?? null, Boolean(page && !page.session));
-  detail(grid, 'companion tab', info ? `${info.tab ?? '—'} · epoch ${info.epoch ?? '—'}` : null);
+  detail(grid, 'companion tab', info ? `${info.tab ?? '—'} · epoch ${info.epoch ?? '—'}` : companionTab ? `${companionTab.tab ?? '—'} · syncing` : null);
   detail(grid, 'ownership', info ? (info.terminal ? 'retired' : info.bound ? 'bound' : 'unbound') : null, Boolean(info?.terminal));
-  detail(grid, 'recorder', page ? `fiber v${page.recorderVersion ?? '—'} · run ${page.runId ?? '—'}` : 'not attached', Boolean(isChat && !page));
+  detail(grid, 'recorder', page ? `fiber v${page.recorderVersion ?? '—'} · run ${page.runId ?? '—'}` : internal && isChat ? 'waiting for companion' : 'not attached', Boolean(!internal && isChat && !page));
   detail(grid, 'turn', page ? (page.generating ? `${shorten(page.turnId, 8)} · live` : 'idle') : null);
   detail(grid, 'observed', page ? `${page.events} events · ${page.calls} calls` : null);
   detail(grid, 'in this browser', info ? `${info.pending} held · ${info.pendingAll} total` : null, Boolean(info?.pendingAll));
@@ -299,6 +365,7 @@ export function initConnectionAdvanced(onLayoutChanged?: () => void): Connection
   const overwrite = $<HTMLInputElement>('connectionAdvancedOverwrite');
   const durations = $<HTMLInputElement>('connectionAdvancedDurations');
   let current: CompanionDiagnostics | null = null;
+  let host: InternalBrowserDockState | null = null;
   let busy = false;
   let preferenceBusy = false;
 
@@ -335,17 +402,23 @@ export function initConnectionAdvanced(onLayoutChanged?: () => void): Connection
     $('connectionAdvancedAge').textContent = t('refreshing…');
     paintControls();
     try {
-      const diagnosticsResponse = await window.api.companionDiagnostics();
+      const [hostResponse, diagnosticsResponse] = await Promise.all([
+        queryInternalBrowser(),
+        window.api.companionDiagnostics()
+      ]);
+      host = hostResponse.ok ? hostResponse.data : null;
       current = diagnosticsResponse.ok ? diagnosticsResponse.data : null;
-      if (!current) {
-        paintDiagnostics(null);
-        $('connectionAdvancedAge').textContent = !diagnosticsResponse.ok
-          ? diagnosticsResponse.error
-          : t('No runtime diagnostics yet');
+      if (!host && !current) {
+        paintDiagnostics(null, null);
+        $('connectionAdvancedAge').textContent = !hostResponse.ok
+          ? hostResponse.error
+          : !diagnosticsResponse.ok
+            ? diagnosticsResponse.error
+            : t('No runtime diagnostics yet');
         $('connectionAdvancedGrid').replaceChildren();
         return;
       }
-      paintDiagnostics(current);
+      paintDiagnostics(host, current);
     } finally {
       busy = false;
       paintControls();
@@ -392,7 +465,7 @@ export function initConnectionAdvanced(onLayoutChanged?: () => void): Connection
     onLayoutChanged?.();
   });
   window.setInterval(() => {
-    if (details.open && current && !busy) paintDiagnosticAge(current);
+    if (details.open && (host || current) && !busy) paintDiagnosticAge(host, current);
   }, 1000);
   paintControls();
 

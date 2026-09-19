@@ -1,3 +1,4 @@
+import './icons.css';
 import { defaultAppearance, paletteTokens } from '../shared/appearance.js';
 import type { ViewMenuApi } from '../preload/view-menu.js';
 import type { ViewMenuCommand, ViewMenuSnapshot } from '../shared/view-menu.js';
