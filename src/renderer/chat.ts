@@ -2867,16 +2867,22 @@ function paintRecoveryStatus(): boolean {
   return false;
 }
 
-/** One line under the header saying what is happening right now. */
+/** One compact rail above the composer saying what the selected turn is doing. */
 function paintStateLine(): void {
   window.clearTimeout(durationTimer);
   durationTimer = undefined;
   const note = $('chatState');
-  const { tone, working, ticking } = stateLine();
+  const rail = $('turnStatus');
+  const indicator = $('turnStatusIcon');
+  const snake = indicator.querySelector<SVGElement>('.turn-status-snake')!;
+  const check = indicator.querySelector<HTMLElement>('.turn-status-check')!;
+  const { tone, phase, ticking } = stateLine();
   ui(note, 'textContent', () => stateLine().text);
-  note.className = `subhead-note${tone ? ` ${tone}` : ''}`;
-  // Running state and timer ownership cannot depend on a translated label.
-  note.classList.toggle('is-working', working === true);
+  rail.hidden = note.textContent === '';
+  rail.className = `turn-status-rail${tone ? ` ${tone}` : ''}${phase ? ` is-${phase}` : ''}`;
+  indicator.hidden = phase === undefined;
+  snake.toggleAttribute('hidden', phase !== 'working');
+  check.toggleAttribute('hidden', phase !== 'complete');
   const recovering = paintRecoveryStatus();
   const goalWaiting = controlledSessionId === selectedId && controlledSelection === selectionGeneration && !!goalWaitView;
   if (goalWaiting) paintGoalProgress();
@@ -2901,7 +2907,35 @@ function badgeSignature(): string {
   return sessions.map((entry) => sessionBadges(entry).map((badge) => badge.text).join(',')).join('|');
 }
 
-function stateLine(): { text: string; tone: '' | 'is-live' | 'is-bad'; working?: boolean; ticking?: boolean } {
+const TURN_WORK_WORDS = [
+  'Pumping tokens',
+  'Juicing context',
+  'Bulking output',
+  'Repping prompts',
+  'Spotting agents',
+  'Loading creatine',
+  'Chasing gains',
+  'Flexing neurons',
+  'TRT mode',
+  'Testosterone boost',
+  'Tren thoughts',
+  'Deca stack',
+  'Anavar cutting',
+  'Dianabol bulking',
+  'Winstrol drying',
+  'Primobolan polishing',
+  'Pissing OpenAI off a little more',
+  'Clauding deez nuts'
+] as const;
+
+/** Stable per turn, then advances slowly enough to feel authored rather than jittery. */
+function turnWorkWord(turnId: string, elapsedSeconds: number): string {
+  let seed = 0;
+  for (const character of turnId) seed = (seed * 31 + character.charCodeAt(0)) >>> 0;
+  return TURN_WORK_WORDS[(seed + Math.floor(elapsedSeconds / 5)) % TURN_WORK_WORDS.length]!;
+}
+
+function stateLine(): { text: string; tone: '' | 'is-live' | 'is-bad'; phase?: 'working' | 'complete'; ticking?: boolean } {
   if (!deps.state()?.config.ui.developerMode) {
     const summary = sessions.find(entry => entry.id === selectedId);
     if (!summary || detailFor !== selectedId) return { text: '', tone: '' };
@@ -2912,10 +2946,11 @@ function stateLine(): { text: string; tone: '' | 'is-live' | 'is-bad'; working?:
     const startedAt = summary.finishTurn?.turnId === turnId ? summary.finishTurn.startedAt
       : events.find(event => event.kind === 'turn_start' && event.turnId === turnId)?.time;
     const endedAt = events.find(event => event.kind === 'turn_end' && event.turnId === turnId)?.time;
-    if (startedAt === undefined) return { text: active ? t("Working…") : '', tone: '', working: !!active };
+    if (startedAt === undefined) return { text: active ? `${t(turnWorkWord(turnId, 0))}…` : '', tone: '', phase: active ? 'working' : undefined };
     if (!active && endedAt === undefined) return { text: '', tone: '' };
     const seconds = Math.max(0, Math.floor(((active ? Date.now() : endedAt!) - startedAt) / 1000));
-    return { text: t("{0} for {1}{2}s", [active ? t("Working") : t("Worked"), seconds >= 60 ? `${Math.floor(seconds / 60)}m ` : '', seconds % 60]), tone: '', working: !!active, ticking: !!active };
+    const action = active ? t(turnWorkWord(turnId, seconds)) : t("Worked");
+    return { text: t("{0} for {1}{2}s", [action, seconds >= 60 ? `${Math.floor(seconds / 60)}m ` : '', seconds % 60]), tone: '', phase: active ? 'working' : 'complete', ticking: !!active };
   }
   // Recording follows the conversation the browser can see. A tool call arrives over the
   // connector carrying nothing that identifies its caller, so work driven from the phone,

@@ -558,6 +558,38 @@ it('moves Connect into the sidebar control and preserves status diagnostics afte
   expect(disconnectAction.disabled).toBe(true);
 });
 
+it('holds a failed Connect as orange Attention until its error toast is dismissed', async () => {
+  let failed: any;
+  const connect = vi.fn(() => Promise.resolve({ ok: true as const, data: failed }));
+  const mounted = await mountChat({ hasApiKey: true }, [], { connect });
+  const doc = mounted.window.document;
+  const action = doc.getElementById('sidebarConnect') as HTMLButtonElement;
+  failed = structuredClone(mounted.state);
+  failed.status.state = 'tunnel-unavailable';
+  failed.status.detail = 'No connector is available.';
+
+  vi.useFakeTimers();
+  try {
+    action.click();
+    expect(action.textContent).toBe('Connecting…');
+    expect(action.disabled).toBe(true);
+    await Promise.resolve(); await Promise.resolve();
+    expect(action.textContent).toBe('Attention!');
+    expect(action.classList.contains('is-attention')).toBe(true);
+    expect(action.closest('.connection-anchor')?.classList.contains('is-attention')).toBe(true);
+    expect(action.disabled).toBe(true);
+    expect(doc.querySelector('.toast')?.textContent).toBe('No connector is available.');
+
+    vi.advanceTimersByTime(3_200);
+    expect(doc.querySelector('.toast')).toBeNull();
+    expect(action.textContent).toBe('Connect');
+    expect(action.classList.contains('is-attention')).toBe(false);
+    expect(action.disabled).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it('routes an unconfigured Connect action to Setup without attempting a connection', async () => {
   const connect = vi.fn();
   const mounted = await mountChat({}, [], { connect });

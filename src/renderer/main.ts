@@ -131,6 +131,9 @@ let showAllSteps: boolean | null = null;
 let setupProfileBusy = false;
 let setupKeySave: Promise<boolean> = Promise.resolve(true);
 let openSkillsLibrary: () => void = () => undefined;
+type ConnectionActionPhase = 'idle' | 'connecting' | 'attention';
+let connectionActionPhase: ConnectionActionPhase = 'idle';
+let connectionActionAttempt = 0;
 
 // ------------------------------------------------------------------- tabs
 
@@ -1023,6 +1026,55 @@ function paintSetupFields(): void {
   }
 }
 
+/**
+ * The main process owns connection truth; this owns only feedback for the click still in flight.
+ * Keeping that phase beside the button prevents a failed status push from flashing Connect between
+ * Connecting and the error acknowledgement.
+ */
+function paintConnectionAction(next: AppState): void {
+  const { status } = next;
+  const connected = status.state === 'connected';
+  const disconnecting = status.state === 'disconnecting';
+  const statusBusy = disconnecting || status.state === 'starting-server' || status.state === 'connecting-tunnel';
+  const connecting = connectionActionPhase === 'connecting' || statusBusy;
+  const attention = connectionActionPhase === 'attention' && !connected;
+  const missing = missingStep(next);
+  const button = $<HTMLButtonElement>('sidebarConnect');
+  const connectHadFocus = document.activeElement === button;
+
+  button.dataset.collapsed = String(connected);
+  button.disabled = connected || connecting || attention;
+  button.tabIndex = connected ? -1 : 0;
+  button.setAttribute('aria-hidden', String(connected));
+  button.title = attention ? status.detail : !connected && missing ? missing.text : '';
+  button.classList.toggle('is-attention', attention);
+  button.closest('.connection-anchor')?.classList.toggle('is-attention', attention);
+  ui(button, 'textContent', () => attention
+    ? t('Attention!')
+    : disconnecting
+      ? t('Disconnecting…')
+      : connecting
+        ? t('Connecting…')
+        : t('Connect'));
+  if (connected && connectHadFocus) $('sidebarConnection').focus({ preventScroll: true });
+}
+
+function connectionAttemptFailed(next: AppState): boolean {
+  return next.status.state === 'auth-failed' || next.status.state === 'tunnel-unavailable' ||
+    (next.status.state === 'disconnected' && next.status.detail.trim() !== '');
+}
+
+function showConnectionAttention(attempt: number, message: string): void {
+  if (!state || attempt !== connectionActionAttempt) return;
+  connectionActionPhase = 'attention';
+  paintConnectionAction(state);
+  toast(message, () => {
+    if (!state || attempt !== connectionActionAttempt || connectionActionPhase !== 'attention') return;
+    connectionActionPhase = 'idle';
+    paintConnectionAction(state);
+  });
+}
+
 function apply(next: AppState): void {
   // An older key/status response must not restore a profile retired by a newer switch.
   if ((next.config.tunnel.profileEpoch ?? 0) < (state?.config.tunnel.profileEpoch ?? 0)) return;
@@ -1044,15 +1096,7 @@ function apply(next: AppState): void {
   const appearanceUi = requestedSettings?.ui ?? config.ui;
   appearance.apply(appearanceUi);
 
-  const sidebarConnect = $<HTMLButtonElement>('sidebarConnect');
-  const connectHadFocus = document.activeElement === sidebarConnect;
-  sidebarConnect.dataset.collapsed = String(connected);
-  sidebarConnect.disabled = connected || busy;
-  sidebarConnect.tabIndex = connected ? -1 : 0;
-  sidebarConnect.setAttribute('aria-hidden', String(connected));
-  sidebarConnect.title = !connected && missing ? missing.text : '';
-  ui(sidebarConnect, 'textContent', () => disconnecting ? t('Disconnecting…') : busy ? t('Connecting…') : t('Connect'));
-  if (connected && connectHadFocus) $('sidebarConnection').focus({ preventScroll: true });
+  paintConnectionAction(next);
 
   // ---- global connection surface
   const connectionTone = connected ? 'is-connected' : offline ? 'is-offline' : busy ? 'is-busy' : failed ? 'is-error' : '';
@@ -1808,7 +1852,20 @@ $('sidebarConnect').addEventListener('click', async () => {
   if (isRunning(state.status.state)) {
     const disconnected = await run(api.disconnect()); if (!disconnected) return; apply(disconnected);
   }
-  const connected = await run(api.connect()); if (connected) apply(connected);
+  const attempt = ++connectionActionAttempt;
+  connectionActionPhase = 'connecting';
+  paintConnectionAction(state);
+  const reply = await api.connect();
+  if (attempt !== connectionActionAttempt) return;
+  if (!reply.ok) {
+    showConnectionAttention(attempt, reply.error);
+    return;
+  }
+  connectionActionPhase = connectionAttemptFailed(reply.data) ? 'attention' : 'idle';
+  apply(reply.data);
+  if (connectionActionPhase === 'attention') {
+    showConnectionAttention(attempt, reply.data.status.detail || t(STATUS_TEXT[reply.data.status.state]));
+  }
 });
 $('connectionPopoverDisconnect').addEventListener('click', async () => {
   if (!state || state.status.state !== 'connected') return;

@@ -129,13 +129,23 @@ export function filterSettingsSections(view: HTMLElement, search: string): void 
 }
 
 let toastTimer: number | undefined;
+let toastDismiss: (() => void) | undefined;
 
-export function toast(message: string): void {
+function dismissToast(): void {
   document.querySelector('.toast')?.remove();
+  window.clearTimeout(toastTimer);
+  toastTimer = undefined;
+  const dismiss = toastDismiss;
+  toastDismiss = undefined;
+  dismiss?.();
+}
+
+export function toast(message: string, onDismiss?: () => void): void {
+  dismissToast();
   const node = el('div', 'toast', message);
   document.body.append(node);
-  window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => node.remove(), 3200);
+  toastDismiss = onDismiss;
+  toastTimer = window.setTimeout(dismissToast, 3200);
 }
 
 /** Unwraps an IPC reply, showing the main process's own error text on failure. */

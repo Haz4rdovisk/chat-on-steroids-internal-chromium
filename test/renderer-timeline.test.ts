@@ -2376,10 +2376,19 @@ it('shows Send directly before MCP, keeps After this turn selected, and changes 
 
 it('shows elapsed work for the exact recorded turn without exposing lifecycle rows', async () => {
   const { w, append } = await boot([{ seq: 1, time: T0, source: 'extension', kind: 'turn_start', turnId: 'held-turn' }]);
-  expect(w.document.getElementById('chatState')!.textContent).toMatch(/^Working for /);
+  const rail = w.document.getElementById('turnStatus')!;
+  expect(w.document.getElementById('chatState')!.textContent).toMatch(/^(Pumping tokens|Juicing context|Bulking output|Repping prompts|Spotting agents|Loading creatine|Chasing gains|Flexing neurons|TRT mode|Testosterone boost|Tren thoughts|Deca stack|Anavar cutting|Dianabol bulking|Winstrol drying|Primobolan polishing|Pissing OpenAI off a little more|Clauding deez nuts) for /);
+  expect(rail.classList).toContain('is-working');
+  expect(w.document.querySelectorAll('#turnStatusIcon .turn-status-snake-segment')).toHaveLength(8);
+  expect(w.document.querySelector('#turnStatusIcon .turn-status-snake')!.hasAttribute('hidden')).toBe(false);
+  expect(w.document.querySelector('#turnStatusIcon .turn-status-check')!.hasAttribute('hidden')).toBe(true);
   (w as any).api.getSessionControls = (id: string) => Promise.resolve({ ok: true, data: { sessionId: id, automation: 'off', activeTurnId: null, finishHeld: false, blocked: '', job: null } });
   await append([{ seq: 2, time: T0 + 65_000, source: 'extension', kind: 'turn_end', turnId: 'held-turn', outcome: 'completed' }]);
   expect(w.document.getElementById('chatState')!.textContent).toBe('Worked for 1m 5s');
+  expect(rail.classList).toContain('is-complete');
+  expect(w.document.querySelector('#turnStatusIcon .turn-status-check')!.classList).toContain('ph-check');
+  expect(w.document.querySelector('#turnStatusIcon .turn-status-snake')!.hasAttribute('hidden')).toBe(true);
+  expect(w.document.querySelector('#turnStatusIcon .turn-status-check')!.hasAttribute('hidden')).toBe(false);
 });
 
 
