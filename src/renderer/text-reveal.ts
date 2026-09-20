@@ -7,9 +7,9 @@
  */
 
 const PAINT_INTERVAL_MS = 32;
-const BASE_CHARS_PER_SECOND = 64;
-const CATCH_UP_CHARS_PER_SECOND = 150;
-const FINAL_CHARS_PER_SECOND = 175;
+const BASE_CHARS_PER_SECOND = 68;
+const CATCH_UP_CHARS_PER_SECOND = 160;
+const FINAL_CHARS_PER_SECOND = 185;
 const CATCH_UP_START = 48;
 const CATCH_UP_FULL = 320;
 const MAX_ELAPSED_MS = 80;
@@ -21,6 +21,7 @@ export interface TextReveal {
   update: (target: string, options: { animate: boolean; final: boolean }) => void;
   value: () => string;
   settled: () => boolean;
+  finish: () => void;
   dispose: () => void;
 }
 
@@ -135,6 +136,7 @@ export function createTextReveal(
     },
     value: () => target,
     settled: () => visible === target.length,
+    finish: () => { if (visible < target.length) settle(target); },
     dispose: cancel
   };
 }

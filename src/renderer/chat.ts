@@ -927,7 +927,11 @@ function paintDeliveryControls(): void {
   if (canInject && explicitInjection && $<HTMLSelectElement>('sendMode').value === 'auto') $<HTMLSelectElement>('sendMode').value = 'tool';
   if (!canInject && !canSendDirectly && !queueAtFinish) $<HTMLSelectElement>('sendMode').value = 'auto';
   const pending = pendingComposerInput();
-  const stop = (working || !!pending) && !currentPreparedPlan() && !authoredComposerText().trim() && !(imageDrafts.get(draftKey())?.length);
+  const presenting = assistantPresentation();
+  const presentationOnly = !working && !pending && !!presenting && !currentPreparedPlan() &&
+    !authoredComposerText().trim() && !(imageDrafts.get(draftKey())?.length);
+  const stop = (working || !!pending || presentationOnly) && !currentPreparedPlan() &&
+    !authoredComposerText().trim() && !(imageDrafts.get(draftKey())?.length);
   // Hover selects delivery for the next message. Clicking the empty-composer
   // Stop still acts immediately; there is no second Stop action in the menu.
   $('sendOptions').hidden = !canInject && !canSendDirectly && !queueAtFinish;
@@ -938,14 +942,14 @@ function paintDeliveryControls(): void {
   send.disabled = !stop && (preparedPlan
     ? !compactMode && (preparedPlan.sending || preparedPlan.stages.some(stage => !stage.trim()))
     : !hasDraft);
-  send.dataset.action = stop ? 'stop' : 'send';
-  ui(send, 'aria-label', () => stop ? (controlledStopPending ? t("Stop requested") : t("Stop turn")) : compactMode ? t("Compact & resume") : t("Send message"));
+  send.dataset.action = presentationOnly ? 'finish-presentation' : stop ? 'stop' : 'send';
+  ui(send, 'aria-label', () => presentationOnly ? t("Show full response") : stop ? (controlledStopPending ? t("Stop requested") : t("Stop turn")) : compactMode ? t("Compact & resume") : t("Send message"));
   if (stop && !working && pending) ui(send, 'aria-label', () => t("Cancel delivery"));
   const planAction = selectedId ? t("Queue plan at Session finish") : t("Start full plan");
   if (preparedPlan && !stop) send.setAttribute('aria-label', planAction);
   else if (planMode && !stop) ui(send, 'aria-label', () => t("Generate plan"));
   send.classList.toggle('is-plan-ready', !!preparedPlan && !compactMode && !stop);
-  ui(send, 'title', () => stop && !working && pending ? t("Cancel delivery") : compactMode && !stop ? t("Compact & resume") : preparedPlan && !stop ? planAction : planMode && !stop ? t("Click to generate plan") : '');
+  ui(send, 'title', () => presentationOnly ? t("Show full response") : stop && !working && pending ? t("Cancel delivery") : compactMode && !stop ? t("Compact & resume") : preparedPlan && !stop ? planAction : planMode && !stop ? t("Click to generate plan") : '');
   send.classList.toggle('is-stop', stop);
   const sendIcon = send.querySelector<HTMLElement>('.send-icon')!;
   sendIcon.classList.toggle('ph', !stop);
@@ -1368,7 +1372,7 @@ async function loadDetail(navigate = false, olderBefore?: number, newerFrom?: nu
   paintDetail(!prepend && newerFrom === undefined, incremental);
   // A selection opens at the latest message; the previous chat's viewport is not
   // a reading position in this one. Apply only after the current load has rendered.
-  if (opening) $('chatBody').scrollTop = $('chatBody').scrollHeight;
+  if (opening && timelineOwnsSharedScroll()) $('chatBody').scrollTop = $('chatBody').scrollHeight;
   if (opening) requestHistory(-1, true);
   void loadHandoff();
   // A burst can contain more than one renderer-sized page between coalesced notifications.
@@ -1759,14 +1763,34 @@ interface AssistantProjection {
 
 const assistantProjections = new WeakMap<HTMLElement, AssistantProjection>();
 
+function assistantPresentation(): AssistantProjection | null {
+  const boxes = $('timeline').querySelectorAll<HTMLElement>('.assistant-response.is-revealing');
+  const box = boxes.item(boxes.length - 1);
+  return box ? assistantProjections.get(box) ?? null : null;
+}
+
+/** A completed backend turn has no Stop authority. This only reveals bytes already recorded. */
+function finishAssistantPresentation(): boolean {
+  if ($<HTMLButtonElement>('chatSend').dataset.action !== 'finish-presentation') return false;
+  const working = selectedId !== null && controlledSessionId === selectedId &&
+    controlledSelection === selectionGeneration && controlledTurnId !== null;
+  if (working || pendingComposerInput() || currentPreparedPlan() || authoredComposerText().trim() ||
+      imageDrafts.get(draftKey())?.length) return false;
+  const presentation = assistantPresentation();
+  if (!presentation) return false;
+  presentation.reveal.finish();
+  return true;
+}
+
 function paintAssistantContent(box: HTMLElement, state: AssistantProjection, visible: string, settled: boolean): void {
-  const pane = box.isConnected ? $('chatBody') : null;
+  const pane = box.isConnected && timelineOwnsSharedScroll() ? $('chatBody') : null;
   const paneTop = pane?.getBoundingClientRect().top ?? 0;
   const before = pane ? box.getBoundingClientRect() : null;
   const content = renderedMarkdown(visible, settled ? state.capture : undefined);
   content.classList.add('assistant-message-content');
   state.content.replaceWith(content);
   state.content = content;
+  const wasRevealing = box.classList.contains('is-revealing');
   box.classList.toggle('is-revealing', !settled);
   const actions = box.querySelector<HTMLElement>(':scope > .assistant-message-actions');
   if (actions) actions.hidden = !(state.final && settled);
@@ -1774,6 +1798,7 @@ function paintAssistantContent(box: HTMLElement, state: AssistantProjection, vis
   if (pane && timelineFollowBottom) pane.scrollTop = pane.scrollHeight;
   else if (pane && before && before.bottom <= paneTop) pane.scrollTop += box.getBoundingClientRect().height - before.height;
   if (settled && state.final) paintStateLine();
+  if (wasRevealing && settled && box.isConnected) paintDeliveryControls();
 }
 
 function updateAssistantBox(
@@ -1798,7 +1823,10 @@ function updateAssistantBox(
   const label = box.querySelector<HTMLElement>(':scope > b');
   if (label) ui(label, 'textContent', () => state!.final ? 'ChatGPT' : t("ChatGPT (partial)"));
   state.reveal.update(source, { animate, final: state.final });
-  box.classList.toggle('is-revealing', !state.reveal.settled());
+  const revealing = !state.reveal.settled();
+  const revealStarted = revealing && !box.classList.contains('is-revealing');
+  box.classList.toggle('is-revealing', revealing);
+  if (revealStarted && box.isConnected) paintDeliveryControls();
   const actions = box.querySelector<HTMLElement>(':scope > .assistant-message-actions');
   if (actions) actions.hidden = !(state.final && state.reveal.settled());
 }
@@ -1933,6 +1961,10 @@ async function fillTimelineHistory(): Promise<void> {
   try {
     while (historyDemand) {
       const demand = historyDemand;
+      if (!timelineOwnsSharedScroll()) {
+        historyDemand = null;
+        break;
+      }
       if (demand.sessionId !== selectedId || demand.selection !== selectionGeneration || detailFor !== selectedId) {
         historyDemand = null;
         break;
@@ -2813,12 +2845,12 @@ function paintDetail(followBottom = historyBefore === null, animateAssistant = f
   $('chatProjectName').textContent = project?.name ?? '';
   ui($('chatTitle'), 'textContent', () => summary ? summary.title || t("Untitled session") : t("New chat"));
 
-  paintDeliveryControls();
   paintAgentFilter();
   // Selection retires data/control ownership immediately, but the last painted rows
   // remain inert until the destination arrives. Queue/status repaints must not turn
   // this short loading interval into the New Chat welcome screen.
   if (selectedId !== null && detailFor !== selectedId) {
+    paintDeliveryControls();
     paintStateLine();
     $('inputQueue').setAttribute('inert', '');
     $('timelineEmpty').hidden = true;
@@ -2836,7 +2868,9 @@ function paintDetail(followBottom = historyBefore === null, animateAssistant = f
   // Preserve the visible logical row when late transcript revisions change the
   // height above it; retaining absolute scrollTop would move the reader's content.
   const pane = $('chatBody');
-  const restoreViewport = preserveTimelineViewport(pane, $('timelineContent'), followBottom && timelineFollowBottom);
+  const restoreViewport = timelineOwnsSharedScroll()
+    ? preserveTimelineViewport(pane, $('timelineContent'), followBottom && timelineFollowBottom)
+    : () => {};
   const timelineRows: HTMLElement[] = [];
   const keep = new Set<string>();
   let activityBoundary = '';
@@ -2903,6 +2937,7 @@ function paintDetail(followBottom = historyBefore === null, animateAssistant = f
   reconcileChildren($('timeline'), groupImageRows(groupToolRows(timelineRows)));
   paintPendingInputs();
   $('timelineEmpty').hidden = selectedId !== null || timelineRows.length > 0 || $('inputQueue').childElementCount > 0;
+  paintDeliveryControls();
   paintStateLine();
   restoreViewport();
 
@@ -2935,8 +2970,10 @@ function paintDetail(followBottom = historyBefore === null, animateAssistant = f
 function revealNewestInput(): void {
   timelineFollowBottom = true;
   paintDetail(true);
-  const pane = $('chatBody');
-  pane.scrollTop = pane.scrollHeight;
+  if (timelineOwnsSharedScroll()) {
+    const pane = $('chatBody');
+    pane.scrollTop = pane.scrollHeight;
+  }
 }
 
 // -------------------------------------------------------------------- handoff
@@ -3077,7 +3114,7 @@ function stateLine(): { text: string; tone: '' | 'is-live' | 'is-bad'; phase?: '
     const endedAt = events.find(event => event.kind === 'turn_end' && event.turnId === turnId)?.time;
     if (startedAt === undefined) return { text: active ? `${t(turnWorkWord(turnId, 0))}…` : '', tone: '', phase: active ? 'working' : undefined };
     if (!active && endedAt === undefined) return { text: '', tone: '' };
-    const presenting = !active && !!$('timeline').querySelector('.assistant-response.is-revealing');
+    const presenting = !active && !!assistantPresentation();
     const working = !!active || presenting;
     const seconds = Math.max(0, Math.floor(((working ? Date.now() : endedAt!) - startedAt) / 1000));
     const action = working ? t(turnWorkWord(turnId, seconds)) : t("Worked");
@@ -4290,6 +4327,11 @@ export function openChatView(name: string): void {
 let currentChatView = 'timeline';
 const chatViewScroll = new Map<string, number>();
 
+/** Timeline data can repaint while Settings is open, but only the visible view owns the shared scroller. */
+function timelineOwnsSharedScroll(): boolean {
+  return currentChatView === 'timeline';
+}
+
 function showView(name: string): void {
   const body = $('chatBody');
   chatViewScroll.set(currentChatView, body.scrollTop);
@@ -4686,7 +4728,7 @@ export function initChat(next: Deps): void {
   $('composerSettings').addEventListener('toggle', paintTaskActions);
   initContextMeter();
   $('createPlan').addEventListener('click', () => { if (taskPlans.has(draftKey())) cancelTaskPlan(); else void createTaskPlan(deps.state()?.config.ui.planBackend ?? 'chatgpt'); });
-  $('composer').addEventListener('submit', (event) => { event.preventDefault(); if (skillPicker?.hasCommand('compact')) void sendComposer(); else if (currentPreparedPlan()) void sendPreparedPlan(); else if (taskPlans.has(draftKey())) { if (!$('createPlan').dataset.busy) void createTaskPlan(deps.state()?.config.ui.planBackend ?? 'chatgpt'); } else void sendComposer(); });
+  $('composer').addEventListener('submit', (event) => { event.preventDefault(); if (finishAssistantPresentation()) return; if (skillPicker?.hasCommand('compact')) void sendComposer(); else if (currentPreparedPlan()) void sendPreparedPlan(); else if (taskPlans.has(draftKey())) { if (!$('createPlan').dataset.busy) void createTaskPlan(deps.state()?.config.ui.planBackend ?? 'chatgpt'); } else void sendComposer(); });
 
   $('sessionList').addEventListener('click', (event) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-id]');
@@ -4700,19 +4742,24 @@ export function initChat(next: Deps): void {
   const historyPane = $('chatBody');
   let pendingScrollDirection = 0;
   historyPane.addEventListener('wheel', event => {
+    if (!timelineOwnsSharedScroll()) return;
     pendingScrollDirection = Math.sign(event.deltaY);
     if (pendingScrollDirection < 0) timelineFollowBottom = false;
     requestHistory(pendingScrollDirection);
   }, { passive: true });
   let pointerScrollTop: number | null = null;
-  historyPane.addEventListener('pointerdown', () => { pointerScrollTop = historyPane.scrollTop; });
+  historyPane.addEventListener('pointerdown', () => {
+    pointerScrollTop = timelineOwnsSharedScroll() ? historyPane.scrollTop : null;
+  });
   window.addEventListener('pointerup', () => { pointerScrollTop = null; });
   historyPane.addEventListener('keydown', event => {
+    if (!timelineOwnsSharedScroll()) return;
     pendingScrollDirection = ['ArrowUp', 'PageUp', 'Home'].includes(event.key) ? -1 : ['ArrowDown', 'PageDown', 'End'].includes(event.key) ? 1 : 0;
     if (pendingScrollDirection < 0) timelineFollowBottom = false;
     requestHistory(pendingScrollDirection);
   });
   historyPane.addEventListener('scroll', () => {
+    if (!timelineOwnsSharedScroll()) return;
     let userDirection = 0;
     if (pointerScrollTop !== null) {
       const direction = Math.sign(historyPane.scrollTop - pointerScrollTop);

@@ -2043,8 +2043,8 @@ it('keeps one live compaction across refused source calls and unrelated old-turn
   expect(state()).toBe('Summary requested — waiting for ChatGPT…');
   expect(card.className).toContain('tone-wait');
   expect(card.textContent).not.toContain('Still reading the old task.');
-  await settle(400);
-  expect(app.w.document.querySelector('.ev-assistant_message')!.textContent).toContain('Still reading the old task.');
+  await vi.waitFor(() => expect(app.w.document.querySelector('.ev-assistant_message')!.textContent)
+    .toContain('Still reading the old task.'), { timeout: 1500, interval: 40 });
   await app.append([{ ...brief!, seq: 6, time: T0 + 6000 }, { ...end!, seq: 7, time: T0 + 7000 }]);
   expect(state()).toBe('Summary written — saving the handoff…');
   expect(card.textContent).toContain('Goal: keep the loop running.');
@@ -2171,7 +2171,7 @@ it('reveals a live assistant revision continuously and offers copy only on its f
   await settle(240);
   expect(content().length).toBeGreaterThan(beforeExtension);
   expect(content().length).toBeLessThan(extendedTarget.length);
-  await vi.waitFor(() => expect(content()).toBe(extendedTarget), { timeout: 4000, interval: 40 });
+  await vi.waitFor(() => expect(content()).toBe(extendedTarget), { timeout: 5000, interval: 40 });
   const actions = app.w.document.querySelector<HTMLElement>('.assistant-message-actions')!;
   expect(actions.hidden).toBe(true);
   const finalTarget = `${extendedTarget} ${'done'.repeat(12)}`;
@@ -2187,6 +2187,33 @@ it('reveals a live assistant revision continuously and offers copy only on its f
   copy.click();
   await settle();
   expect(app.live.copied).toEqual([finalTarget]);
+});
+
+it('keeps the Stop shape through local reveal without cancelling a completed backend turn', async () => {
+  const app = await boot([{ seq: 1, time: T0, source: 'extension', kind: 'turn_start', turnId: 'visual-turn' }]);
+  const api = (app.w as any).api;
+  const stop = vi.fn(async () => ({ ok: true, data: {} }));
+  api.stopSessionTurn = stop;
+  api.getSessionControls = (id: string) => Promise.resolve({ ok: true, data: {
+    sessionId: id, automation: 'off', activeTurnId: null, finishHeld: false, blocked: '', job: null
+  } });
+  const finalText = `Final response ${'continues on screen. '.repeat(32)}`.trimEnd();
+  await app.append([
+    { seq: 2, time: T0 + 12_000, source: 'extension', kind: 'assistant_message', messageId: 'visual-answer',
+      turnId: 'visual-turn', message: text(finalText), state: 'final', final: true },
+    { seq: 3, time: T0 + 13_000, source: 'extension', kind: 'turn_end', turnId: 'visual-turn', outcome: 'completed' }
+  ]);
+  const send = app.w.document.getElementById('chatSend') as HTMLButtonElement;
+  expect(send.dataset.action).toBe('finish-presentation');
+  expect(send.getAttribute('aria-label')).toBe('Show full response');
+  expect(send.querySelector('.send-icon')?.classList.contains('ph-stop')).toBe(true);
+  expect(app.w.document.querySelector('.assistant-message-content')!.textContent).not.toBe(finalText);
+  send.click();
+  await settle();
+  expect(stop).not.toHaveBeenCalled();
+  expect(app.w.document.querySelector('.assistant-message-content')!.textContent?.trimEnd()).toBe(finalText);
+  expect(send.dataset.action).toBe('send');
+  expect(send.querySelector('.send-icon')?.classList.contains('ph-arrow-up')).toBe(true);
 });
 
 it('renders writing directives as titled document boxes without trusting their markup', async () => {
@@ -2882,14 +2909,21 @@ it('blocks an empty stage, deletes it explicitly, and hides the whole dock in se
   await settle(); expect(live.sent[0]).toMatchObject({ text: 'Verify lines', stages: [] });
 });
 
-it('opens Agents & automation at its heading and restores the conversation scroll', async () => {
-  const { w } = await boot([], false);
+it('opens Agents & automation at its heading and keeps background timeline work out of its scroll', async () => {
+  const { w, append } = await boot([], false);
   const body = w.document.getElementById('chatBody')!;
+  Object.defineProperties(body, {
+    clientHeight: { configurable: true, value: 400 },
+    scrollHeight: { configurable: true, value: 2_000 }
+  });
   body.scrollTop = 620;
   const chat = await import('../src/renderer/chat.js');
   chat.openChatView('settings');
   expect(body.scrollTop).toBe(0);
   body.scrollTop = 340;
+  await append([{ seq: 1, time: T0 + 1, source: 'extension', kind: 'assistant_message',
+    messageId: 'background-answer', message: text('Background answer '.repeat(80)), state: 'final', final: true }]);
+  expect(body.scrollTop).toBe(340);
   chat.openChatView('timeline');
   expect(body.scrollTop).toBe(620);
   chat.openChatView('settings');
