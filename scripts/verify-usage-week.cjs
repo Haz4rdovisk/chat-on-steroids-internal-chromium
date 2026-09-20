@@ -79,6 +79,7 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.getElementById('usageMessages6').textContent`), '4', 'Native keyboard activation selects Sunday');
     assert.equal(await js(`localStorage.getItem('cos.usage.weekStart')`), '0');
     win.setSize(560, 850); win.webContents.setZoomFactor(1.25);
+    await new Promise(resolve => setTimeout(resolve, 100));
     await js(`window.setFixtureLanguage('ja'); document.documentElement.dataset.theme='light'`);
     await capture('narrow-japanese-light');
     console.log('Usage week: bottom placement, compact rows, exact counts, native keyboard, persistence and two layouts passed.');
