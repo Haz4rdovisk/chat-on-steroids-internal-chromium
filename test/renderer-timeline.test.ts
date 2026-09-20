@@ -995,7 +995,9 @@ it('does not group images across an intervening authored message or another turn
     image(4, 'a'), image(5, 'b')]);
   const galleries = [...app.w.document.querySelectorAll('.generated-image-gallery')];
   expect(galleries.map(gallery => gallery.querySelectorAll('.ev-native_image').length)).toEqual([2, 1, 1]);
-  expect(galleries[0]?.nextElementSibling?.textContent).toContain('Between images');
+  const intervening = galleries[0]?.nextElementSibling;
+  expect(intervening?.classList.contains('ev-assistant_message')).toBe(true);
+  expect(intervening?.nextElementSibling).toBe(galleries[1]);
 });
 
 it('retains one exact-message gallery when only one image gains a proven turn', async () => {
