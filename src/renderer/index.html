@@ -322,16 +322,6 @@
             </div>
             <div class="settings-surface usage-summary" id="usageSummary"></div>
             <div class="usage-sections">
-              <section class="settings-section usage-section usage-messages" aria-labelledby="usageMessagesTitle">
-                <header class="settings-section-head">
-                  <div><h2 id="usageMessagesTitle">Verified messages</h2><p>Counts recorded native messages with verified model selection. Tool injections and messages without model evidence are excluded.</p></div>
-                  <button class="btn usage-week-start" id="usageWeekStart" type="button" title="Change start day"><i class="ico ph ph-calendar-dots" aria-hidden="true"></i><span id="usageWeekStartLabel"></span></button>
-                </header>
-                <div class="settings-surface usage-message-surface">
-                  <dl class="usage-message-counts" id="usageMessageCounts" aria-live="polite" translate="no"><div><dt>GPT-5.6</dt><dd id="usageMessages56">—</dd></div><div><dt>GPT-6</dt><dd id="usageMessages6">—</dd></div></dl>
-                  <p class="muted" id="usageMessagePeriod"></p>
-                </div>
-              </section>
               <section class="settings-section usage-section">
                 <header class="settings-section-head">
                   <div><h2>Token activity per day</h2><p>Estimated context processed per tool call · last 52 weeks</p></div>
@@ -362,12 +352,17 @@
                   </div>
                 </div>
               </section>
-              <section class="settings-section usage-section">
+              <section class="settings-section usage-section usage-messages" aria-labelledby="usageMessagesTitle">
                 <header class="settings-section-head">
-                  <div><h2>Remaining usage per model</h2><p>Reported by ChatGPT. Shared pools and feature quotas are listed separately. Missing data means not reported.</p></div>
+                  <div><h2 id="usageMessagesTitle">Messages and limits</h2><p>Verified native sends alongside model, shared and feature limits reported by ChatGPT.</p></div>
                   <button class="btn" id="refreshUsage" type="button"><i class="ico ph ph-arrow-clockwise" aria-hidden="true"></i>Refresh</button>
                 </header>
-                <div class="settings-surface usage-limits" id="modelUsage"></div>
+                <div class="settings-surface usage-message-surface">
+                  <button class="btn usage-week-start" id="usageWeekStart" type="button" title="Change start day" aria-describedby="usageMessagePeriod"><i class="ico ph ph-calendar-dots" aria-hidden="true"></i><span id="usageWeekStartLabel"></span></button>
+                  <dl class="usage-message-counts" id="usageMessageCounts" aria-live="polite" translate="no"><div><dt>GPT-5.6</dt><dd><strong id="usageMessages56">—</strong><span class="muted">sent</span></dd></div><div><dt>GPT-6</dt><dd><strong id="usageMessages6">—</strong><span class="muted">sent</span></dd></div></dl>
+                  <p class="muted" id="usageMessagePeriod"></p>
+                </div>
+                <div class="settings-surface" id="modelUsage"><div class="usage-limits" id="usageLimits"></div></div>
               </section>
             </div>
           </div>
@@ -860,6 +855,7 @@
                 <header class="settings-section-head automation-section-head"><div><h2 class="settings-section-title">Browser &amp; history</h2><p>Manage background tabs, browser preferences, and history compaction.</p></div></header>
                 <div class="settings-surface pane">
                   <label class="setting"><span class="setting-text"><b>ChatGPT browser</b><em>Used when the app launches a browser. Install the companion and sign in to ChatGPT in this browser's active profile. Already connected tabs stay in their browser.</em></span><select id="chatBrowser"><option value="chrome">Google Chrome / Chromium</option><option value="edge">Microsoft Edge</option><option value="brave">Brave Browser</option></select></label>
+                  <label class="setting"><span class="setting-text"><b>Browser bridge port</b><em id="browserBridgePortHint">Auto uses the first available port. A fixed port must be available.</em></span><select id="browserBridgePort"><option value="auto">Auto</option><option value="8765">8765</option><option value="8766">8766</option><option value="8767">8767</option><option value="8768">8768</option><option value="8769">8769</option></select></label>
                   <label class="setting"><span class="setting-text"><b>Background chats</b><em>Keep app-created ChatGPT tabs in the background.</em></span><input id="backgroundChats" type="checkbox" /></label>
                   <label class="setting"><span class="setting-text"><b>Automatic plugin refresh</b><em>Let the companion refresh changed connector tools in ChatGPT. Off by default; manual refresh remains available in ChatGPT.</em></span><input id="autoRefreshPlugins" type="checkbox" /></label>
                   <label class="setting"><span class="setting-text"><b>Browser only</b><em>Do not open tabs for automatic plugin refresh or chat recovery. Explicit new chats, workers and Reload models still work.</em></span><input id="browserOnly" type="checkbox" /></label>
