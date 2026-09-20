@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const output = process.argv[2] ? path.resolve(root, process.argv[2]) : path.join(root, '.tmp/message-send-20260918/ui');
 app.setPath('userData', path.join(output, 'runtime'));
+// This fixture owns geometry and input custody; focused renderer tests own reveal pacing.
+app.commandLine.appendSwitch('force-prefers-reduced-motion');
 
 app.whenReady().then(async () => {
   const { createServer } = await import('vite');
@@ -29,7 +31,7 @@ app.whenReady().then(async () => {
       startedAt:1,updatedAt:1,endedAt:null,events:0,userMessages:0,toolCalls:0,lastToolCallAt:null,
       processExitNonzero:0,toolRejected:0,toolInternalErrors:0,errors:0,estimatedTokens:0,contextTokens:0,
       lastHandoffId:null,lastHandoffAt:null,lastTurnOutcome:null,activeTurnId:'fixture-turn',agents:[],origin:null};
-    window.queueFixture={inputs:[],sent:[],files:[],events:[],session,controls:{}};
+    window.queueFixture={inputs:[],sent:[],stops:[],files:[],events:[],session,controls:{}};
     const live=window.queueFixture;
     window.api=new Proxy({
       getState:()=>ok(state),getLog:()=>ok([]),listProjects:()=>ok([]),
@@ -41,6 +43,7 @@ app.whenReady().then(async () => {
       getChatModels:()=>ok({state:'ready',observedAt:Date.now(),models:[{id:'gpt-5.6-sol',label:'GPT-5.6 Sol',efforts:['high']}]}),
       listInputs:()=>ok(structuredClone(live.inputs)),listPausedHelpers:()=>ok([]),
       onSessionChanged:fn=>{live.notify=fn;return ()=>{}},chooseFiles:()=>ok(live.files),
+      stopSessionTurn:(id,turnId)=>{live.stops.push({id,turnId});return ok({})},
       editQueuedInput:(id,text)=>{const row=live.inputs.find(r=>r.id===id);if(!row||row.state!=='queued')return ok(false);row.text=text.trim();return ok(true)},
       cancelInput:id=>{const row=live.inputs.find(r=>r.id===id);if(!row)return ok(false);row.state='cancelled';return ok(true)},
       sendInput:input=>{live.sent.push(input);const row={...input,state:'queued',owner:null,createdAt:Date.now(),conversationId:session.conversationId};live.inputs.push(row);return ok(row)}
@@ -67,12 +70,13 @@ app.whenReady().then(async () => {
         if (await js(condition)) return;
         await new Promise(resolve => setTimeout(resolve, 25));
       }
-      throw new Error('Renderer condition timed out: ' + condition + ' ' + JSON.stringify(await js('({ready:!!window.fixtureReady,error:window.fixtureError})')));
+      throw new Error('Renderer condition timed out: ' + condition + ' ' + JSON.stringify(await js('({ready:!!window.fixtureReady,error:window.fixtureError,keys:window.fixtureKeys,focused:document.activeElement?.id,stops:window.queueFixture?.stops,timeline:document.getElementById("timeline")?.innerText,events:window.queueFixture?.events?.length})')));
     };
     const click = selector => js(`document.querySelector(${JSON.stringify(selector)}).click()`);
     const checks = [];
     await wait('window.fixtureReady && !!document.querySelector("#sessionList [data-id]")');
     await click('#sessionList [data-id]');
+    await wait('document.getElementById("chatSend").dataset.action === "stop"');
     await js(`(()=>{const value=Array.from({length:8},(_,index)=>'Previous answer line '+(index+1)+' stays anchored during delivery.').join('\\n');
       queueFixture.events=[{seq:1,time:Date.now()-1000,source:'extension',kind:'assistant_message',messageId:'previous-answer',
         message:{text:value,chars:value.length,truncated:false},state:'final',final:true}];queueFixture.notify()})()`);
@@ -116,8 +120,31 @@ app.whenReady().then(async () => {
     checks.push({messageFeedback:{queued:queuedFeedback,confirmed:confirmedFeedback}});
     await js(`queueFixture.events.push({seq:3,time:Date.now()+1,source:'extension',kind:'assistant_message',messageId:'answer',message:{text:'Done',chars:4,truncated:false},final:true});queueFixture.notify()`);
     await wait('!document.querySelector("#inputQueue .assistant-thinking")');
-    await js(`queueFixture.inputs=[];queueFixture.events=[];queueFixture.notify()`);
+    await js(`queueFixture.inputs=[];queueFixture.sent=[];queueFixture.events=[];queueFixture.notify()`);
     await wait('!document.querySelector("#inputQueue .pending-message")');
+    await js('document.getElementById("composer").requestSubmit()');
+    await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    assert.equal(await js('queueFixture.stops.length'), 0);
+    checks.push('empty native form submit does not request Stop');
+    await js(`(() => {
+      const input=document.getElementById('chatInput'),form=document.getElementById('composer');
+      input.value='One correction';input.dispatchEvent(new Event('input',{bubbles:true}));
+      form.requestSubmit();form.requestSubmit();
+    })()`);
+    await wait('queueFixture.sent.length === 1 && document.getElementById("chatSend").dataset.action === "stop"');
+    assert.equal(await js('queueFixture.stops.length'), 0);
+    checks.push('repeated submit sends one correction without stopping');
+    await click('#chatSend');
+    await wait('queueFixture.stops.length === 1');
+    assert.deepEqual(await js('queueFixture.stops[0]'), {id:'queue-fixture-session',turnId:'fixture-turn'});
+    await wait('document.getElementById("chatSend").getAttribute("aria-label") === "Stop turn"');
+    await js(`window.fixtureKeys=[];document.addEventListener('keydown',e=>fixtureKeys.push({key:e.key,target:e.target.id}),true);
+      document.getElementById('chatSend').focus()`);
+    win.webContents.sendInputEvent({type:'keyDown',keyCode:'Return'});
+    win.webContents.sendInputEvent({type:'char',keyCode:'\r'});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode:'Return'});
+    await wait('queueFixture.stops.length === 2');
+    checks.push('button and keyboard activation stop only the captured turn');
     const seed = async () => {
       await js(`queueFixture.inputs=[{id:'editable-task',sessionId:queueFixture.session.id,text:'Review the attached screenshots',mode:'after-turn',dueAt:0,
         state:'queued',owner:null,createdAt:0,conversationId:'fixture-chat',model:null,reasoningEffort:null}];queueFixture.notify()`);
