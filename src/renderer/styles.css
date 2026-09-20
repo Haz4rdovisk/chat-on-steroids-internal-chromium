@@ -2574,6 +2574,32 @@ input[readonly] {
   color: var(--soft);
 }
 
+.writing-block {
+  margin: 0.8em 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--card) 78%, var(--page));
+}
+
+.writing-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--wash);
+  color: var(--soft);
+}
+
+.writing-block-head .ico { width: 16px; height: 16px; font-size: 16px; }
+.writing-block-title { min-width: 0; overflow: hidden; color: var(--ink); font-size: calc(13px * var(--text-scale, 1)); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.writing-block-body { min-width: 0; padding: 12px 14px 14px; }
+.writing-block-body > .msg { font: inherit; }
+.writing-block-body > .msg > :first-child { margin-top: 0; }
+.writing-block-body > .msg > :last-child { margin-bottom: 0; }
+
 .msg.rich code {
   font-family: var(--mono);
   font-size: 0.94em;

@@ -1432,6 +1432,120 @@ function safeRenderedHref(value: string): string | null {
 
 const PROVIDER_CITATION = /^\uE200(?:cite|filecite)\uE202[^\uE200\uE201]*\uE201/;
 const PROVIDER_URL = /^\uE200url\uE202([^\uE200-\uE202]*)\uE202([^\uE200-\uE202]*)\uE201/;
+const WRITING_OPEN = ':::writing{';
+const WRITING_PLACEHOLDER = (index: number) => `\uE300cos-writing-${index}\uE301`;
+
+interface WritingBlock {
+  body: string;
+  id: string | null;
+  title: string;
+  variant: string;
+}
+
+function writingAttributes(source: string): Map<string, string> | null {
+  const values = new Map<string, string>();
+  const attribute = /\s*([A-Za-z][A-Za-z0-9_-]*)\s*=\s*"((?:\\.|[^"\\])*)"/gy;
+  let offset = 0;
+  while (offset < source.length) {
+    if (!source.slice(offset).trim()) break;
+    attribute.lastIndex = offset;
+    const match = attribute.exec(source);
+    if (!match || values.has(match[1]!)) return null;
+    values.set(match[1]!, match[2]!.replace(/\\(["\\])/g, '$1'));
+    offset = attribute.lastIndex;
+  }
+  return source.slice(offset).trim() ? null : values;
+}
+
+/** Finds the header's real closing brace without treating one inside a quoted title as syntax. */
+function writingHeader(source: string, start: number): { end: number; values: Map<string, string> } | null {
+  let quoted = false, escaped = false;
+  for (let index = start + WRITING_OPEN.length; index < source.length; index++) {
+    const char = source[index]!;
+    if (escaped) { escaped = false; continue; }
+    if (quoted && char === '\\') { escaped = true; continue; }
+    if (char === '"') { quoted = !quoted; continue; }
+    if (!quoted && (char === '\n' || char === '\r')) return null;
+    if (!quoted && char === '}') {
+      const values = writingAttributes(source.slice(start + WRITING_OPEN.length, index));
+      return values ? { end: index + 1, values } : null;
+    }
+  }
+  return null;
+}
+
+function insideMarkdownFence(source: string, offset: number): boolean {
+  let fence: { char: string; length: number } | null = null;
+  for (const line of source.slice(0, offset).split(/\r?\n/)) {
+    const marker = line.match(/^[\t ]{0,3}(`{3,}|~{3,})/)?.[1];
+    if (!marker) continue;
+    if (!fence) fence = { char: marker[0]!, length: marker.length };
+    else if (marker[0] === fence.char && marker.length >= fence.length) fence = null;
+  }
+  return fence !== null;
+}
+
+/**
+ * Extracts ChatGPT's writing directive before Markdown parsing. An open block is useful while
+ * the answer is still streaming, so the end of the current revision is a temporary close.
+ */
+function writingBlocks(source: string): { markdown: string; blocks: WritingBlock[] } {
+  const blocks: WritingBlock[] = [];
+  const opening = /(^|\n)[\t ]{0,3}:::writing\{/g;
+  const closing = /[\t ]*:::[\t ]*(?=\r?\n|$)/g;
+  let markdown = '', cursor = 0;
+  for (let match = opening.exec(source); match; match = opening.exec(source)) {
+    const lineStart = match.index + match[1]!.length;
+    const start = match.index + match[0].length - WRITING_OPEN.length;
+    if (insideMarkdownFence(source, lineStart)) continue;
+    const header = writingHeader(source, start);
+    if (!header) continue;
+    const rawVariant = header.values.get('variant')?.trim() || 'document';
+    const variant = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(rawVariant) ? rawVariant : 'writing';
+    const title = (header.values.get('title')?.trim() || (variant === 'document' ? 'Document' : 'Writing')).slice(0, 500);
+    closing.lastIndex = header.end;
+    const end = closing.exec(source);
+    let bodyStart = header.end;
+    if (source.startsWith('\r\n', bodyStart)) bodyStart += 2;
+    else if (source[bodyStart] === '\n') bodyStart += 1;
+    else if (source[bodyStart] === ' ' || source[bodyStart] === '\t') bodyStart += 1;
+    const bodyEnd = end?.index ?? source.length;
+    markdown += `${source.slice(cursor, lineStart)}\n\n${WRITING_PLACEHOLDER(blocks.length)}\n\n`;
+    blocks.push({ body: source.slice(bodyStart, bodyEnd), id: header.values.get('id')?.trim().slice(0, 200) || null, title, variant });
+    cursor = end ? end.index + end[0].length : source.length;
+    opening.lastIndex = cursor;
+    if (!end) break;
+  }
+  return { markdown: blocks.length ? markdown + source.slice(cursor) : source, blocks };
+}
+
+function writingBlock(block: WritingBlock): HTMLElement {
+  const section = el('section', 'writing-block');
+  section.setAttribute('dir', 'auto');
+  section.setAttribute('aria-label', block.title);
+  if (block.id) section.dataset.writingId = block.id;
+  section.dataset.variant = block.variant;
+  const glyph = el('i', 'ico ph ph-file-text');
+  glyph.setAttribute('aria-hidden', 'true');
+  const title = el('strong', 'writing-block-title', block.title);
+  ui(title, 'title', () => block.title);
+  const head = el('header', 'writing-block-head');
+  head.append(glyph, title);
+  const body = el('div', 'writing-block-body');
+  body.append(renderedMarkdown(block.body));
+  section.append(head, body);
+  return section;
+}
+
+function hydrateWritingBlocks(root: HTMLElement, blocks: readonly WritingBlock[]): void {
+  if (!blocks.length) return;
+  const indexes = new Map(blocks.map((_, index) => [WRITING_PLACEHOLDER(index), index]));
+  for (const paragraph of root.querySelectorAll('p')) {
+    const index = indexes.get(paragraph.textContent ?? '');
+    if (index !== undefined) paragraph.replaceWith(writingBlock(blocks[index]!));
+  }
+}
+
 /** Native citation labels and URLs may arrive before the DOM paints the rest of a canonical
  * revision. Use only exact source ranges with matching preceding prose, never substitute
  * the whole captured HTML or guess a destination from an opaque provider reference id. */
@@ -1516,6 +1630,7 @@ export function renderedMarkdown(source: string, capture?: StoredText): HTMLElem
   // never evidence that it contains the current message revision.
   const text = withoutMessageReaction(source).slice(0, MAX_RENDERED_HTML_CHARS);
   const citations = text.includes('\uE200') ? citationLabels(text, capture) : new Map<string, string>();
+  const writing = writingBlocks(text);
   // An inline tokenizer leaves literal citation examples inside code spans/fences intact.
   const parser = new Marked({ gfm: true, extensions: [{
     name: 'providerReference', level: 'inline',
@@ -1533,8 +1648,10 @@ export function renderedMarkdown(source: string, capture?: StoredText): HTMLElem
       return citations.get(token.raw) ?? (token.raw.startsWith('\uE200filecite\uE202') ? '' : '<span title="The recording does not include this source URL">[source link unavailable]</span>');
     }
   }] });
-  const html = parser.parse(text, { async: false });
-  return renderedMessage({ text: html, chars: html.length, truncated: html.length > MAX_RENDERED_HTML_CHARS }, text);
+  const html = parser.parse(writing.markdown, { async: false });
+  const rendered = renderedMessage({ text: html, chars: html.length, truncated: html.length > MAX_RENDERED_HTML_CHARS }, text);
+  hydrateWritingBlocks(rendered, writing.blocks);
+  return rendered;
 }
 
 export function renderedMessage(html: StoredText | null | undefined, fallback: string): HTMLElement {
@@ -1633,6 +1750,7 @@ export function renderedMessage(html: StoredText | null | undefined, fallback: s
 }
 
 interface AssistantProjection {
+  animate: boolean;
   capture?: StoredText;
   content: HTMLElement;
   final: boolean;
@@ -1649,8 +1767,13 @@ function paintAssistantContent(box: HTMLElement, state: AssistantProjection, vis
   content.classList.add('assistant-message-content');
   state.content.replaceWith(content);
   state.content = content;
+  box.classList.toggle('is-revealing', !settled);
+  const actions = box.querySelector<HTMLElement>(':scope > .assistant-message-actions');
+  if (actions) actions.hidden = !(state.final && settled);
+  if (state.animate && visible.trim()) clearPresentedThinkingFeedback();
   if (pane && timelineFollowBottom) pane.scrollTop = pane.scrollHeight;
   else if (pane && before && before.bottom <= paneTop) pane.scrollTop += box.getBoundingClientRect().height - before.height;
+  if (settled && state.final) paintStateLine();
 }
 
 function updateAssistantBox(
@@ -1663,19 +1786,21 @@ function updateAssistantBox(
   if (!state) {
     const content = renderedMarkdown('');
     content.classList.add('assistant-message-content');
-    state = { content, capture: event.renderedHtml, final: event.final === true } as AssistantProjection;
+    state = { animate, content, capture: event.renderedHtml, final: event.final === true } as AssistantProjection;
     state.reveal = createTextReveal((visible, settled) => paintAssistantContent(box, state!, visible, settled));
     assistantProjections.set(box, state);
     box.append(content);
   }
+  state.animate = animate;
   state.capture = event.renderedHtml;
   state.final = event.final === true;
   box.classList.toggle('is-streaming', !state.final);
-  const actions = box.querySelector<HTMLElement>(':scope > .assistant-message-actions');
-  if (actions) actions.hidden = !state.final;
   const label = box.querySelector<HTMLElement>(':scope > b');
   if (label) ui(label, 'textContent', () => state!.final ? 'ChatGPT' : t("ChatGPT (partial)"));
   state.reveal.update(source, { animate, final: state.final });
+  box.classList.toggle('is-revealing', !state.reveal.settled());
+  const actions = box.querySelector<HTMLElement>(':scope > .assistant-message-actions');
+  if (actions) actions.hidden = !(state.final && state.reveal.settled());
 }
 
 function assistantBox(event: Extract<SessionEvent, { kind: 'assistant_message' }>, animate: boolean): HTMLElement {
@@ -1683,7 +1808,7 @@ function assistantBox(event: Extract<SessionEvent, { kind: 'assistant_message' }
   box.append(el('b'));
   updateAssistantBox(box, event, animate);
   const actions = el('div', 'assistant-message-actions');
-  actions.hidden = event.final !== true;
+  actions.hidden = !(event.final === true && assistantProjections.get(box)?.reveal.settled());
   const copy = el('button', 'assistant-copy') as HTMLButtonElement;
   copy.type = 'button';
   ui(copy, 'aria-label', () => t('Copy'));
@@ -1929,8 +2054,11 @@ function paintInputReceipt(row: HTMLElement, item: ReturnType<typeof timelineIte
   if (item.kind !== 'event' || item.event.kind !== 'user_message') return;
   const receipt = row.querySelector<HTMLElement>('.input-receipt');
   if (!receipt) return;
-  receipt.hidden = hasLaterModelActivity(item.event.time);
-  if (!receipt.hidden && item.event.inputId) confirmThinkingFeedback(item.event.inputId);
+  if (item.event.inputId) receipt.dataset.inputId = item.event.inputId;
+  const feedback = item.event.inputId ? thinkingFeedback.get(item.event.inputId) : undefined;
+  const stagingConfirmation = item.event.inputDelivery === 'confirmed' && !!feedback;
+  receipt.hidden = hasLaterModelActivity(item.event.time) && !stagingConfirmation;
+  if (!receipt.hidden && item.event.inputDelivery === 'confirmed' && item.event.inputId) confirmThinkingFeedback(item.event.inputId);
   receipt.parentElement?.classList.toggle('has-input-receipt', !receipt.hidden);
 }
 
@@ -2676,7 +2804,6 @@ function composerSessionSelection(summary: SessionSummary | null | undefined) {
   return opening?.model ? { model: opening.model, reasoningEffort: opening.reasoningEffort ?? undefined, observedAt: opening.createdAt } : null;
 }
 function paintDetail(followBottom = historyBefore === null, animateAssistant = false): void {
-  paintStateLine();
   const summary = sessions.find((s) => s.id === selectedId) ?? null;
   applyComposerSessionModel(selectedId ? `${selectedId}:${selectionGeneration}` : null, composerSessionSelection(summary) ?? null);
   const config = deps.state()?.config;
@@ -2692,6 +2819,7 @@ function paintDetail(followBottom = historyBefore === null, animateAssistant = f
   // remain inert until the destination arrives. Queue/status repaints must not turn
   // this short loading interval into the New Chat welcome screen.
   if (selectedId !== null && detailFor !== selectedId) {
+    paintStateLine();
     $('inputQueue').setAttribute('inert', '');
     $('timelineEmpty').hidden = true;
     $('chatFoot').hidden = true;
@@ -2775,6 +2903,7 @@ function paintDetail(followBottom = historyBefore === null, animateAssistant = f
   reconcileChildren($('timeline'), groupImageRows(groupToolRows(timelineRows)));
   paintPendingInputs();
   $('timelineEmpty').hidden = selectedId !== null || timelineRows.length > 0 || $('inputQueue').childElementCount > 0;
+  paintStateLine();
   restoreViewport();
 
   const facts: string[] = [];
@@ -2948,9 +3077,11 @@ function stateLine(): { text: string; tone: '' | 'is-live' | 'is-bad'; phase?: '
     const endedAt = events.find(event => event.kind === 'turn_end' && event.turnId === turnId)?.time;
     if (startedAt === undefined) return { text: active ? `${t(turnWorkWord(turnId, 0))}…` : '', tone: '', phase: active ? 'working' : undefined };
     if (!active && endedAt === undefined) return { text: '', tone: '' };
-    const seconds = Math.max(0, Math.floor(((active ? Date.now() : endedAt!) - startedAt) / 1000));
-    const action = active ? t(turnWorkWord(turnId, seconds)) : t("Worked");
-    return { text: t("{0} for {1}{2}s", [action, seconds >= 60 ? `${Math.floor(seconds / 60)}m ` : '', seconds % 60]), tone: '', phase: active ? 'working' : 'complete', ticking: !!active };
+    const presenting = !active && !!$('timeline').querySelector('.assistant-response.is-revealing');
+    const working = !!active || presenting;
+    const seconds = Math.max(0, Math.floor(((working ? Date.now() : endedAt!) - startedAt) / 1000));
+    const action = working ? t(turnWorkWord(turnId, seconds)) : t("Worked");
+    return { text: t("{0} for {1}{2}s", [action, seconds >= 60 ? `${Math.floor(seconds / 60)}m ` : '', seconds % 60]), tone: '', phase: working ? 'working' : 'complete', ticking: working };
   }
   // Recording follows the conversation the browser can see. A tool call arrives over the
   // connector carrying nothing that identifies its caller, so work driven from the phone,
@@ -3605,9 +3736,12 @@ function adoptThinkingFeedback(inputId: string, sessionId: string): void {
 
 function clearSettledThinkingFeedback(sessionId: string, incoming: readonly SessionEvent[]): void {
   for (const feedback of thinkingFeedback.values()) {
-    if (feedback.sessionId !== sessionId || !incoming.some(event => event.seq >= feedback.afterSeq &&
-      (event.kind === 'chat_error' || event.kind === 'native_image' || event.kind === 'tool_call' || event.kind === 'page_tool' || event.kind === 'agent_message' ||
-        (event.kind === 'assistant_message' && !!withoutMessageReaction(event.message.text).trim())))) continue;
+    if (feedback.sessionId !== sessionId) continue;
+    const relevant = incoming.filter(event => event.seq >= feedback.afterSeq);
+    const immediate = relevant.some(event => event.kind === 'chat_error' || event.kind === 'native_image' || event.kind === 'tool_call' || event.kind === 'page_tool' || event.kind === 'agent_message');
+    const assistant = relevant.some(event => event.kind === 'assistant_message' && !!withoutMessageReaction(event.message.text).trim());
+    const confirmation = relevant.some(event => event.kind === 'user_message' && event.inputId === feedback.inputId && event.inputDelivery === 'confirmed');
+    if (!immediate && (!assistant || feedback.confirmed || confirmation)) continue;
     clearThinkingFeedback(feedback.inputId, false);
   }
 }
@@ -3635,6 +3769,19 @@ function thinkingFeedbackRow(feedback: ThinkingFeedback, existing?: HTMLElement 
     row.removeAttribute('title');
   }
   return row;
+}
+
+/** The first response glyph, not its earlier canonical snapshot, retires visual waiting. */
+function clearPresentedThinkingFeedback(): void {
+  const feedback = currentThinkingFeedback();
+  if (!feedback?.confirmed) return;
+  clearThinkingFeedback(feedback.inputId, false);
+  for (const receipt of $('timeline').querySelectorAll<HTMLElement>('.input-receipt')) {
+    if (receipt.dataset.inputId !== feedback.inputId) continue;
+    receipt.hidden = true;
+    receipt.parentElement?.classList.remove('has-input-receipt');
+  }
+  paintPendingInputs();
 }
 
 function inputMessageRow(entry: InputEntry, notice: boolean): HTMLElement {
@@ -4115,7 +4262,12 @@ export function openChatView(name: string): void {
   showView(name);
 }
 
+let currentChatView = 'timeline';
+const chatViewScroll = new Map<string, number>();
+
 function showView(name: string): void {
+  const body = $('chatBody');
+  chatViewScroll.set(currentChatView, body.scrollTop);
   $('composer').hidden = name === 'settings';
   $('composerDock').hidden = name === 'settings';
   $('inputQueue').hidden = name !== 'timeline';
@@ -4125,6 +4277,11 @@ function showView(name: string): void {
   for (const view of document.querySelectorAll<HTMLElement>('#chatBody > .view')) {
     view.hidden = view.dataset.view !== name;
   }
+  currentChatView = name;
+  // Settings is a destination, not another point in the conversation's scroll range.
+  // Every sidebar navigation opens it at its heading; returning to chat restores the
+  // conversation position that was visible before the gear was pressed.
+  body.scrollTop = name === 'settings' ? 0 : (chatViewScroll.get(name) ?? 0);
   $('chatSettingsBtn').classList.toggle('is-on', name === 'settings');
 }
 
