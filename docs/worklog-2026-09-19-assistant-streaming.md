@@ -88,6 +88,9 @@ remain the owners of message content and publication timing.
 - Agents & automation no longer inherits the conversation scroller's bottom position. Entering
   that Settings destination starts at its heading; returning to chat restores the prior timeline
   position instead of moving the reader.
+- Background timeline reconciliation, history paging and reveal frames no longer mutate the
+  shared scroller while Agents & automation owns it. Wheel and pointer input on that page also
+  stay page input instead of being interpreted as conversation-history navigation.
 - Assistant `:::writing{...}` directives now render as bounded titled document surfaces. Their
   body keeps the existing Markdown renderer and sanitizer, malformed headers remain ordinary
   text, attributes are bounded, and an unclosed body can render while the canonical answer is
@@ -97,3 +100,15 @@ remain the owners of message content and publication timing.
   same moment as “Worked for” and its completion check.
 - Mainstream and Internal Chromium share the same parser, presentation-state repair and focused
   tests. No recorder, session, IPC or browser-delivery contract changed.
+
+## Composer completion handoff — 2026-09-20
+
+- The composer keeps its filled Stop shape until the last canonical response glyph is visible.
+  While a real turn or queued delivery still exists, the established backend Stop/Cancel paths
+  remain authoritative. After the backend has completed, the short remaining presentation-only
+  state is explicitly local: clicking it reveals the already recorded remainder and never calls
+  `stopSessionTurn`.
+- Tool-heavy turns with no assistant text continue to follow backend controls alone; a text
+  projection is not treated as proof that work exists or has ended.
+- Reveal pacing increased by roughly six percent at base, catch-up and final speeds. Cadence,
+  punctuation weighting, bounds, reduced motion and canonical message ownership are unchanged.
