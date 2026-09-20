@@ -2388,7 +2388,7 @@ input[readonly] {
 #timeline {
   padding: 8px 0 10px;
 }
-#timeline:has(+ #inputQueue > .pending-message) { padding-bottom: 0; }
+#timeline:has(+ #inputQueue > :is(.pending-message, .assistant-thinking)) { padding-bottom: 0; }
 /* Reserve follows recorded AND pending messages, never separates their bubbles. */
 #timelineContent { padding-bottom: var(--timeline-scroll-reserve, 0px); }
 
@@ -3210,21 +3210,23 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .composer-options select { border: 0; background: transparent; color: var(--soft); font: inherit; font-size: calc(11px * var(--text-scale, 1)); max-width: 130px; padding: 5px; }
 .input-queue { display: flex; flex-direction: column; width: 100%; margin: 0 auto; }
 .pending-message { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin: 4px 0 26px auto; width: fit-content; max-width: 82%; text-align: start; }
-.assistant-thinking { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; min-width: 38px; min-height: 26px; margin: 0 0 18px; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--hover) 72%, transparent); color: var(--soft); animation: message-in 160ms ease-out; }
+.assistant-thinking { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; min-width: 38px; min-height: 26px; margin: 0 0 18px; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--hover) 72%, transparent); color: var(--soft); animation: message-fade 160ms ease-out; }
 .assistant-thinking-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: assistant-thinking-jump 900ms ease-in-out infinite; }
 .assistant-thinking-dot:nth-child(2) { animation-delay: 120ms; }
 .assistant-thinking-dot:nth-child(3) { animation-delay: 240ms; }
+.assistant-thinking.is-reserved { visibility: hidden; animation: none; }
+.assistant-thinking.is-reserved .assistant-thinking-dot { animation: none; }
 @keyframes assistant-thinking-jump { 0%, 60%, 100% { transform: translateY(0); opacity: .48; } 30% { transform: translateY(-4px); opacity: 1; } }
 /* Match the canonical user row's padding and footer before receipt arrives. */
 #inputQueue > .pending-message { margin-top: 11px; margin-bottom: 33px; }
 .pending-message-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(15px * var(--text-scale, 1)); line-height: 1.75; }
-.pending-message-status { position: absolute; right: 30px; top: calc(100% + 1px); height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: calc(12px * var(--text-scale, 1)); line-height: 1.45; color: var(--soft); }
+.pending-message-status { position: absolute; right: 28px; top: calc(100% + 1px); width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: calc(12px * var(--text-scale, 1)); line-height: 1.45; color: var(--soft); }
 .pending-message.is-delivery-error .pending-message-status { position: static; display: block; height: auto; margin-top: 4px; font-size: calc(11px * var(--text-scale, 1)); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pending-message.is-delivery-error .pending-message-status { color: var(--red); }
 .pending-message .dock-action { position: absolute; right: 2px; top: calc(100% + 1px); display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 4px; border: 0; border-radius: 7px; background: transparent; color: var(--soft); cursor: pointer; }
 .pending-message .dock-action .ico { width: 15px; height: 15px; }
 .pending-message .dock-action:hover { color: var(--ink); background: var(--hover); }
-.pending-message-status .ico { width: 13px; height: 13px; }
+.pending-message-status .ico { width: 15px; height: 15px; font-size: 15px; }
 .pending-message.is-delivered .pending-message-status { right: 2px; width: 22px; }
 .pending-message .dock-action.delivery-retry { right: 28px; }
 .said.is-user.has-input-receipt { position: relative; margin-bottom: 22px; }
@@ -3234,6 +3236,7 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .session-tooltip { position: fixed; width: 270px; padding: 12px 14px; border: 1px solid var(--edge); border-radius: 10px; background: var(--card); box-shadow: 0 6px 20px #0003; color: var(--ink); font-size: calc(13px * var(--text-scale, 1)); line-height: 1.5; z-index: 100; pointer-events: none; overflow-wrap: anywhere; animation: surface-in 120ms ease-out; }
 @keyframes surface-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes message-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes message-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes working-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 .subhead-note.is-working { display: flex; align-items: center; gap: 8px; }
 .subhead-note.is-working::before { content: ''; width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; animation: working-pulse 1.4s ease-in-out infinite; }
@@ -3241,7 +3244,7 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .app[data-screen='settings'] .panel.is-active:not([data-panel='chat']),
 .app[data-screen='library'] .panel.is-active { animation: surface-in 160ms ease-out; }
 .app[data-screen='settings'] [data-view='settings']:not([hidden]) { animation: surface-in 160ms ease-out; }
-.pending-message.is-entering { animation: message-in 160ms ease-out; }
+.pending-message.is-entering { animation: message-fade 160ms ease-out; }
 .send-button { transition: background 120ms ease, transform 120ms ease; }
 .send-button:active { transform: scale(.94); }
 .pending-message .btn { font-size: calc(12px * var(--text-scale, 1)); padding: 3px 6px; }
