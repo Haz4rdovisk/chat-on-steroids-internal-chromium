@@ -3858,6 +3858,8 @@ select option::checkmark { order: 1; margin-inline-start: auto; color: var(--ink
 .composer-skills-row > #composerAddSkill .ico { width: 15px; height: 15px; }
 
 .app.has-terminal { grid-template-rows: auto auto auto minmax(0, 1fr) minmax(0, var(--terminal-height, 250px)); }
+.app.is-resizing-terminal { transition: none; }
+.app.is-resizing-terminal, .app.is-resizing-terminal * { cursor: ns-resize !important; user-select: none !important; }
 .workspace-terminal { grid-column: 3; grid-row: 5; position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: clip; border-top: 1px solid var(--line); background: var(--page); }
 .workspace-terminal[hidden] { display: none; }
 /* Logical hiding is immediate; keep the outgoing surface painted only for its short exit. */

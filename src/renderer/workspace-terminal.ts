@@ -7,7 +7,20 @@ import { onAppearanceChanged } from './appearance.js';
 import { hideSlidingPanel, showSlidingPanel } from './panel-motion.js';
 import type { LocalProject } from '../shared/projects.js';
 
-type Tab = { id: string; projectId: string; title: string; node: HTMLElement; term: Terminal; fit: FitAddon; ready: boolean; exited: boolean; queued: number; writes: Promise<void> };
+type Tab = {
+  id: string;
+  projectId: string;
+  title: string;
+  node: HTMLElement;
+  term: Terminal;
+  fit: FitAddon;
+  ready: boolean;
+  exited: boolean;
+  ptyCols: number;
+  ptyRows: number;
+  queued: number;
+  writes: Promise<void>;
+};
 
 /** A hidden panel retains its shells; tabs keep the project captured at creation. */
 export function createWorkspaceTerminal() {
@@ -41,25 +54,56 @@ export function createWorkspaceTerminal() {
     for (const tab of tabs.values()) tab.term.options.theme = theme;
   });
   let project: LocalProject | null = null, selected: string | null = null, open = false;
+  let drag: { id: number; y: number; height: number } | null = null;
+  let fitFrame: number | null = null;
+  let panelAnimating = false;
+  let panelMotion = 0;
   const setHeight = (height: number): void => {
     const next = Math.round(Math.max(130, Math.min(window.innerHeight * .65, height)));
     app.style.setProperty('--terminal-height', `${next}px`); resize.setAttribute('aria-valuenow', String(next));
   };
   setHeight(250);
-  const fit = (): void => {
+  const fitNow = (): void => {
+    fitFrame = null;
     const tab = selected ? tabs.get(selected) : null;
     if (!tab || !open || !tab.node.getBoundingClientRect().height) return;
     tab.fit.fit();
-    if (tab.ready && !tab.exited) void window.api.terminalResize(tab.id, Math.min(500, tab.term.cols), Math.min(200, tab.term.rows));
+    if (!tab.ready || tab.exited || drag || panelAnimating) return;
+    const cols = Math.min(500, tab.term.cols), rows = Math.min(200, tab.term.rows);
+    if (tab.ptyCols === cols && tab.ptyRows === rows) return;
+    tab.ptyCols = cols; tab.ptyRows = rows;
+    void window.api.terminalResize(tab.id, cols, rows);
+  };
+  const fit = (): void => {
+    if (fitFrame === null) fitFrame = requestAnimationFrame(fitNow);
   };
   const setOpen = (value: boolean): void => {
     if (open === value) return;
     open = value;
+    const motion = ++panelMotion;
+    panelAnimating = value && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (value) showSlidingPanel(panel, 'up');
     else hideSlidingPanel(panel, 'up');
     app.classList.toggle('has-terminal', value);
     toggle.setAttribute('aria-expanded', String(value));
-    if (value) requestAnimationFrame(() => { fit(); if (selected) tabs.get(selected)?.term.focus(); });
+    if (value) requestAnimationFrame(() => {
+      fit();
+      if (selected) tabs.get(selected)?.term.focus();
+      if (!panelAnimating) return;
+      const transition = app.getAnimations().find(animation =>
+        'transitionProperty' in animation
+        && (animation as CSSTransition).transitionProperty === 'grid-template-rows');
+      if (!transition) {
+        panelAnimating = false;
+        fit();
+        return;
+      }
+      void transition.finished.catch(() => undefined).then(() => {
+        if (panelMotion !== motion || !open) return;
+        panelAnimating = false;
+        fit();
+      });
+    });
   };
   const paint = (): void => {
     tabsHost.replaceChildren();
@@ -88,8 +132,15 @@ export function createWorkspaceTerminal() {
     const node = el('div', 'terminal-screen'); body.append(node);
     const term = new Terminal({ theme: terminalTheme(), cursorBlink: true, fontSize: 13, fontFamily: 'Cascadia Code, Consolas, monospace', scrollback: 5000, allowProposedApi: false });
     const addon = new FitAddon(); term.loadAddon(addon); term.open(node);
-    const tab: Tab = { id, projectId: scope.id, title: scope.name, node, term, fit: addon, ready: false, exited: false, queued: 0, writes: Promise.resolve() };
-    tabs.set(id, tab); selected = id; setOpen(true); paint(); fit();
+    const tab: Tab = {
+      id, projectId: scope.id, title: scope.name, node, term, fit: addon,
+      ready: false, exited: false, ptyCols: 0, ptyRows: 0, queued: 0, writes: Promise.resolve()
+    };
+    tabs.set(id, tab); selected = id; setOpen(true); paint();
+    // Size the local canvas before spawning. While creation is pending, later geometry changes
+    // stay in xterm and are reconciled once with the newly available PTY.
+    addon.fit();
+    tab.ptyCols = Math.min(500, term.cols); tab.ptyRows = Math.min(200, term.rows);
     term.onData(data => {
       if (tab.exited || !tab.ready) return;
       if (tab.queued + data.length > 262_144) { toast(t('Terminal input is busy. Try a smaller paste.')); return; }
@@ -111,7 +162,7 @@ export function createWorkspaceTerminal() {
       }
       return true;
     });
-    const result = await window.api.terminalCreate(id, scope.id, Math.min(500, term.cols), Math.min(200, term.rows));
+    const result = await window.api.terminalCreate(id, scope.id, tab.ptyCols, tab.ptyRows);
     if (!tabs.has(id)) { void window.api.terminalClose(id); return; }
     if (!result.ok) { tab.exited = true; term.writeln(`\r\n${result.error}`); }
     else { tab.ready = true; tab.title = `${scope.name} · ${result.data.shell}`; node.title = result.data.cwd; }
@@ -124,15 +175,33 @@ export function createWorkspaceTerminal() {
   });
   toggle.addEventListener('click', () => { setOpen(!open); if (open && !tabs.size && project) void create(); });
   add.addEventListener('click', () => void create()); empty.addEventListener('click', () => void create()); hide.addEventListener('click', () => setOpen(false));
-  let drag: { id: number; y: number; height: number } | null = null;
-  resize.addEventListener('pointerdown', event => { if (event.button !== 0) return; drag = { id: event.pointerId, y: event.clientY, height: panel.offsetHeight }; resize.setPointerCapture(event.pointerId); event.preventDefault(); });
+  resize.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || drag) return;
+    drag = { id: event.pointerId, y: event.clientY, height: panel.offsetHeight };
+    app.classList.add('is-resizing-terminal');
+    resize.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
   resize.addEventListener('pointermove', event => { if (drag?.id === event.pointerId) setHeight(drag.height + drag.y - event.clientY); });
-  resize.addEventListener('lostpointercapture', () => { drag = null; });
-  resize.addEventListener('pointerup', event => { if (resize.hasPointerCapture(event.pointerId)) resize.releasePointerCapture(event.pointerId); });
+  const finishResize = (event: PointerEvent): void => {
+    if (drag?.id !== event.pointerId) return;
+    drag = null;
+    app.classList.remove('is-resizing-terminal');
+    if (resize.hasPointerCapture(event.pointerId)) resize.releasePointerCapture(event.pointerId);
+    fit();
+  };
+  resize.addEventListener('pointerup', finishResize);
+  resize.addEventListener('pointercancel', finishResize);
+  resize.addEventListener('lostpointercapture', finishResize);
   resize.addEventListener('keydown', event => { if (['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setHeight(panel.offsetHeight + (event.key === 'ArrowUp' ? 24 : -24)); } });
   const observer = new ResizeObserver(fit); observer.observe(body);
   document.addEventListener('keydown', event => { if (event.ctrlKey && event.key === '`' && !panel.contains(event.target as Node)) { event.preventDefault(); toggle.click(); } });
-  window.addEventListener('beforeunload', () => { observer.disconnect(); stopEvents(); stopAppearance(); for (const tab of tabs.values()) tab.term.dispose(); }, { once: true });
+  window.addEventListener('beforeunload', () => {
+    observer.disconnect();
+    if (fitFrame !== null) cancelAnimationFrame(fitFrame);
+    stopEvents(); stopAppearance();
+    for (const tab of tabs.values()) tab.term.dispose();
+  }, { once: true });
   paint();
   return { update(value: LocalProject | null): void { project = value; paint(); } };
 }

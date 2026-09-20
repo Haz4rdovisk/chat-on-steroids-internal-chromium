@@ -783,6 +783,12 @@ from MCP process custody and never consume agent output. The header button or Ct
 a resizable bottom panel. Each new tab captures the selected approved project's canonical cwd;
 changing chats does not retarget existing shells. No project means no guessed cwd. The live
 Command permission gates spawn/input, and input rechecks the original project path.
+Manual panel drag disables the open/close grid transition, fits xterm at most once per animation
+frame, and synchronizes the PTY once when pointer custody ends. Main deduplicates unchanged grid
+sizes, so repeated layout observations cannot make ConPTY redraw the prompt. Window/layout resize
+still synchronizes the selected live shell when its actual rows or columns change. Opening motion
+likewise fits the local canvas throughout but waits for its grid transition to settle before the
+single PTY synchronization.
 
 Up to eight tabs retain interactive shell state. Hiding the panel preserves processes; closing
 a tab, renderer reload/destruction or app shutdown retires them. UUIDs and pending-create tickets
