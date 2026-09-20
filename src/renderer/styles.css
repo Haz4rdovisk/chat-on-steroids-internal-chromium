@@ -2461,6 +2461,26 @@ input[readonly] {
 
 .said { padding: 8px 0; border-radius: 0; background: transparent; }
 
+.assistant-response { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.assistant-message-content { width: 100%; }
+.assistant-message-actions { display: flex; align-items: center; min-height: 28px; margin-top: 3px; }
+.assistant-copy {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.assistant-copy:hover { background: var(--hover); color: var(--ink); }
+.assistant-copy:focus-visible { outline: 1px solid var(--accent-edge); outline-offset: 1px; color: var(--ink); }
+.assistant-copy .ico { width: 16px; height: 16px; font-size: 16px; }
+
 .said.is-user { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 0; margin: 4px 0 4px auto; max-width: 82%; width: fit-content; }
 /* Reserve once, before native reaction metadata arrives. Badge changes never
    alter the bubble, attachments or the next row's geometry. */
@@ -3190,6 +3210,11 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .composer-options select { border: 0; background: transparent; color: var(--soft); font: inherit; font-size: calc(11px * var(--text-scale, 1)); max-width: 130px; padding: 5px; }
 .input-queue { display: flex; flex-direction: column; width: 100%; margin: 0 auto; }
 .pending-message { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin: 4px 0 26px auto; width: fit-content; max-width: 82%; text-align: start; }
+.assistant-thinking { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; min-width: 38px; min-height: 26px; margin: 0 0 18px; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--hover) 72%, transparent); color: var(--soft); animation: message-in 160ms ease-out; }
+.assistant-thinking-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: assistant-thinking-jump 900ms ease-in-out infinite; }
+.assistant-thinking-dot:nth-child(2) { animation-delay: 120ms; }
+.assistant-thinking-dot:nth-child(3) { animation-delay: 240ms; }
+@keyframes assistant-thinking-jump { 0%, 60%, 100% { transform: translateY(0); opacity: .48; } 30% { transform: translateY(-4px); opacity: 1; } }
 /* Match the canonical user row's padding and footer before receipt arrives. */
 #inputQueue > .pending-message { margin-top: 11px; margin-bottom: 33px; }
 .pending-message-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(15px * var(--text-scale, 1)); line-height: 1.75; }
