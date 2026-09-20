@@ -99,6 +99,19 @@ app.on('browser-window-created', (_event, win) => {
           'The sprite escaped its cell horizontally.');
         assert.ok(minY >= geometry.body.top * dpr - 2 && maxY <= geometry.body.bottom * dpr + 2,
           'The sprite escaped its cell vertically.');
+        if (process.platform === 'win32') {
+          const hoverX = Math.round(geometry.shell.x + geometry.shell.width / 2);
+          const hoverY = Math.round(geometry.shell.y + geometry.shell.height / 2);
+          win.webContents.sendInputEvent({ type: 'mouseMove', x: 10, y: 10 });
+          await new Promise(resolve => setTimeout(resolve, 50));
+          assert.equal(win.isFocusable(), false, 'Pointer outside pet content must keep the overlay click-through.');
+          win.webContents.sendInputEvent({ type: 'mouseMove', x: hoverX, y: hoverY });
+          await new Promise(resolve => setTimeout(resolve, 50));
+          assert.equal(win.isFocusable(), true, 'Forwarded pointer proximity must make the pet interactive.');
+          win.webContents.sendInputEvent({ type: 'mouseMove', x: 10, y: 10 });
+          await new Promise(resolve => setTimeout(resolve, 50));
+          assert.equal(win.isFocusable(), false, 'Leaving pet content must restore native click-through.');
+        }
         console.log(JSON.stringify({ userData, shot, zoom: win.webContents.getZoomFactor(), geometry,
           alphaBounds: maxX < 0 ? null : { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } }, null, 2));
         win.webContents.send('pet-overlay:snapshot', {

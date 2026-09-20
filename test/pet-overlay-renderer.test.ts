@@ -119,6 +119,9 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
   expect(openActivity).toHaveBeenCalledWith('session-one');
 
   const tur = dom.window.document.querySelector<HTMLElement>('.pet-shell[data-pet-id="tur-tur-sahur"]')!;
+  expect(tur.style.left).toBe('');
+  expect(tur.style.top).toBe('');
+  expect(tur.style.transform).toMatch(/^translate3d\(/);
   tur.dispatchEvent(new dom.window.MouseEvent('contextmenu', { clientX: 220, clientY: 180, bubbles: true }));
   const menuButtons = [...dom.window.document.querySelectorAll<HTMLButtonElement>('.pet-menu button')];
   expect(menuButtons.map(button => button.textContent)).toContain('OpenAI → ClosedAI');
@@ -128,8 +131,11 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
   expect(tur.dataset.state).toBe('walk');
   expect(dom.window.document.querySelector('.pet-target')?.textContent).toBe('OpenAI');
 
-  tur.getBoundingClientRect = () => ({ left: 100, top: 100, right: 260, bottom: 260, width: 160, height: 160, x: 100, y: 100, toJSON: () => ({}) });
-  pointerListener!({ x: 120, y: 120 });
+  const [, petX, petY] = tur.style.transform.match(/^translate3d\(([-\d.]+)px, ([-\d.]+)px/) ?? [];
+  expect(petX).toBeDefined(); expect(petY).toBeDefined();
+  dom.window.document.dispatchEvent(new dom.window.MouseEvent('mousemove', {
+    clientX: Number(petX) + 80, clientY: Number(petY) + 80, bubbles: true
+  }));
   expect(setInteractive).toHaveBeenLastCalledWith(true);
   pointer(tur, 'pointerdown', 120, 120, 7);
   pointer(tur, 'pointermove', 190, 150, 7);
@@ -139,7 +145,7 @@ it('uses one spritesheet body per pet while preserving specials, multi-pet tasks
   pointer(tur, 'pointerup', 190, 150, 7);
   expect(tur.dataset.state).toBe('landing');
   expect(focusOwner).not.toHaveBeenCalled();
-  pointerListener!({ x: 700, y: 700 });
+  dom.window.document.dispatchEvent(new dom.window.MouseEvent('mousemove', { clientX: 700, clientY: 700, bubbles: true }));
   expect(setInteractive).toHaveBeenLastCalledWith(false);
 
   pointer(tur, 'pointerdown', 120, 120, 8);

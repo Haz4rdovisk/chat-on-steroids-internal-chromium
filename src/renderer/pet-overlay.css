@@ -17,9 +17,13 @@ button { font:inherit; }
 
 .pet-shell {
   position:fixed;
+  left:0;
+  top:0;
   z-index:20;
   width:160px;
   height:160px;
+  contain:layout style size;
+  will-change:transform;
   cursor:grab;
   touch-action:none;
   -webkit-user-drag:none;
@@ -45,7 +49,7 @@ button { font:inherit; }
   transition:transform .28s cubic-bezier(.34,1.3,.64,1);
 }
 
-.pet-props { position:fixed; z-index:15; inset:0; pointer-events:none; }
+.pet-props { position:fixed; z-index:15; left:0; top:0; width:0; height:0; pointer-events:none; }
 .pet-target[hidden],.pet-hit[hidden] { display:none; }
 .pet-target {
   position:absolute; left:0; top:0;

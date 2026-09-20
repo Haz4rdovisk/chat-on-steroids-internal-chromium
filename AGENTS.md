@@ -2576,10 +2576,18 @@ stationary sprites sleep until that deadline, while travel, carry, throw and
 interpolated props retain display-frame updates. Hidden documents and static
 reduced-motion poses park the clock. The overlay owns at most one pending timer or
 animation frame and cancels it on pause, interaction rescheduling and disposal.
+Windows and macOS forward mouse movement through the ignored transparent window;
+the renderer owns proximity and asks main only when native click-through must
+change. Linux retains the bounded cursor poll because Electron does not provide
+that forwarding contract there. Main seeds the current cursor once when showing
+the overlay and suppresses unchanged control/activity projections. Pet travel uses
+composited transforms, and prop roots have no desktop-sized layout box; neither
+movement nor an idle interaction surface may invalidate the fullscreen layout.
 Asset production remains in `docs/pet/PRODUCTION.md`; unit/DOM tests plus
 `scripts/verify-pet-overlay-electron.cjs` check the bundled overlay without
 requiring a provider conversation, and `scripts/verify-pet-performance.cjs`
-measures actual animation wakes and process CPU with unchanged artwork.
+`--full-host` measures the desktop-sized transparent host, pointer transport and
+underlying owner in addition to actual animation wakes and process CPU.
 
 `renderer/main.ts` owns the shell/setup/settings; `chat.ts` owns sessions, composer and timeline;
 interface actions use the shared Phosphor glyph map in
