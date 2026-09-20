@@ -43,6 +43,7 @@ app.whenReady().then(async () => {
     win = new BrowserWindow({ show: false, width: 1040, height: 850, webPreferences: { sandbox: true, backgroundThrottling: false } });
     const js = source => win.webContents.executeJavaScript(source);
     await win.loadURL(server.resolvedUrls.local[0] + 'fixture.html');
+    win.webContents.setZoomFactor(1);
     for (let i = 0; i < 100 && !await js('!!window.fixtureReady'); i++) await new Promise(resolve => setTimeout(resolve, 25));
     assert.equal(await js('!!window.fixtureReady'), true, 'Fixture loads the production Usage module');
     assert.deepEqual(await js(`[document.getElementById('usageMessages56').textContent,document.getElementById('usageMessages6').textContent]`), ['35', '16']);
@@ -72,6 +73,9 @@ app.whenReady().then(async () => {
     await js(`document.getElementById('usageWeekStart').focus()`);
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Space' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Space' });
+    for (let i = 0; i < 40 && await js(`localStorage.getItem('cos.usage.weekStart')`) !== '0'; i++) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
     assert.equal(await js(`document.getElementById('usageMessages6').textContent`), '4', 'Native keyboard activation selects Sunday');
     assert.equal(await js(`localStorage.getItem('cos.usage.weekStart')`), '0');
     win.setSize(560, 850); win.webContents.setZoomFactor(1.25);

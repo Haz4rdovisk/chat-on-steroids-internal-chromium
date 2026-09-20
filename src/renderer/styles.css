@@ -3170,7 +3170,7 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .usage-section { min-width: 0; }
 .usage-message-surface { display: grid; gap: 0; margin-bottom: 12px; padding: 14px 18px 0; }
 .usage-messages .settings-section-head { align-items: center; }
-.usage-week-start { justify-self: start; min-height: 42px; max-width: 100%; }
+.usage-week-start { justify-self: start; min-height: 43px; max-width: 100%; }
 .usage-message-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
 .usage-message-counts > div { min-width: 0; padding: 18px 0; }
 .usage-message-counts > div + div { border-inline-start: 1px solid var(--line); padding-inline-start: 18px; }
