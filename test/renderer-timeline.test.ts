@@ -1051,7 +1051,9 @@ it('keeps a newly sent message above the composer and follows its live reply unt
   app.w.document.getElementById('composer')!.dispatchEvent(new app.w.Event('submit', { bubbles: true, cancelable: true }));
   await settle();
   expect(app.w.document.querySelector('#inputQueue .pending-message')?.textContent).toContain('Keep this visible');
-  expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
+  const reservedThinking = app.w.document.querySelector<HTMLElement>('#inputQueue .assistant-thinking')!;
+  expect(reservedThinking.classList.contains('is-reserved')).toBe(true);
+  expect(reservedThinking.hasAttribute('role')).toBe(false);
   expect(scrollTop).toBe(300);
 
   const inputId = app.live.sent[0]!.id;
@@ -1059,6 +1061,9 @@ it('keeps a newly sent message above the composer and follows its live reply unt
     { seq: 1, time: T0 + 1, source: 'extension', kind: 'user_message', inputId, inputDelivery: 'confirmed', messageId: `input:${inputId}`, message: text('Keep this visible') }
   ]);
   expect(app.w.document.querySelector('.input-receipt:not([hidden])')).not.toBeNull();
+  expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBe(reservedThinking);
+  expect(reservedThinking.classList.contains('is-reserved')).toBe(false);
+  expect(reservedThinking.getAttribute('role')).toBe('status');
   expect(app.w.document.querySelectorAll('#inputQueue .assistant-thinking-dot')).toHaveLength(3);
 
   const answer: Extract<SessionEvent, { kind: 'assistant_message' }> = { seq: 2, time: T0 + 2, source: 'extension',
@@ -1087,13 +1092,17 @@ it('retires thinking feedback on an error and its bounded presentation timeout',
     input.value = value;
     app.w.document.getElementById('composer')!.dispatchEvent(new app.w.Event('submit', { bubbles: true, cancelable: true }));
     await settle();
-    expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
+    const reserved = app.w.document.querySelector<HTMLElement>('#inputQueue .assistant-thinking')!;
+    expect(reserved.classList.contains('is-reserved')).toBe(true);
+    expect(reserved.hasAttribute('role')).toBe(false);
     return app.live.sent.at(-1)!.id;
   };
   const confirm = async (inputId: string, seq: number, value: string) => {
     await app.append([{ seq, time: T0 + seq, source: 'extension', kind: 'user_message', inputId, inputDelivery: 'confirmed', messageId: `input:${inputId}`, message: text(value) }]);
     expect(app.w.document.querySelector('.input-receipt:not([hidden])')).not.toBeNull();
-    expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).not.toBeNull();
+    const thinking = app.w.document.querySelector<HTMLElement>('#inputQueue .assistant-thinking')!;
+    expect(thinking.classList.contains('is-reserved')).toBe(false);
+    expect(thinking.getAttribute('role')).toBe('status');
   };
 
   const first = await send('First attempt');

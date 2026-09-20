@@ -6,9 +6,9 @@
  * as a visual jump. It never delays publication, invents text, or stores a second durable copy.
  */
 
-const FRAME_INTERVAL_MS = 30;
-const MAX_REVEAL_MS = 360;
-const MAX_FINAL_REVEAL_MS = 170;
+const FRAME_INTERVAL_MS = 20;
+const MAX_REVEAL_MS = 460;
+const MAX_FINAL_REVEAL_MS = 220;
 const MAX_ANIMATED_TEXT = 32 * 1024;
 const MAX_ANIMATED_DELTA = 4 * 1024;
 
@@ -26,10 +26,10 @@ function safeEnd(value: string, end: number): number {
 
 function duration(chars: number, final: boolean): number {
   const ceiling = final ? MAX_FINAL_REVEAL_MS : MAX_REVEAL_MS;
-  return Math.max(80, Math.min(ceiling, chars * 6));
+  return Math.max(96, Math.min(ceiling, chars * 8));
 }
 
-/** Calls render at most about ten times per provider revision, regardless of text size. */
+/** Paints at a steady browser-frame cadence while keeping every revision bounded. */
 export function createTextReveal(
   render: (visible: string, settled: boolean) => void,
   reduceMotion: () => boolean = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false

@@ -3602,21 +3602,27 @@ function clearSettledThinkingFeedback(sessionId: string, incoming: readonly Sess
 }
 
 function currentThinkingFeedback(): ThinkingFeedback | null {
-  if (selectedId) return [...thinkingFeedback.values()].reverse().find(feedback => feedback.confirmed && feedback.sessionId === selectedId) ?? null;
+  if (selectedId) return [...thinkingFeedback.values()].reverse().find(feedback => feedback.sessionId === selectedId) ?? null;
   const pending = pendingNewInput?.generation === selectionGeneration ? pendingNewInput.id : null;
-  const feedback = pending ? thinkingFeedback.get(pending) ?? null : null;
-  return feedback?.confirmed ? feedback : null;
+  return pending ? thinkingFeedback.get(pending) ?? null : null;
 }
 
 function thinkingFeedbackRow(feedback: ThinkingFeedback, existing?: HTMLElement | null): HTMLElement {
-  if (existing?.dataset.inputId === feedback.inputId) return existing;
-  const row = el('div', 'assistant-thinking');
+  const row = existing?.dataset.inputId === feedback.inputId ? existing : el('div', 'assistant-thinking');
+  if (!row.childElementCount) row.append(...[0, 1, 2].map(() => el('span', 'assistant-thinking-dot')));
   row.dataset.inputId = feedback.inputId;
-  row.setAttribute('role', 'status');
-  row.setAttribute('aria-live', 'polite');
-  ui(row, 'aria-label', () => t('ChatGPT is thinking'));
-  ui(row, 'title', () => t('ChatGPT is thinking'));
-  row.append(...[0, 1, 2].map(() => el('span', 'assistant-thinking-dot')));
+  row.classList.toggle('is-reserved', !feedback.confirmed);
+  if (feedback.confirmed) {
+    row.setAttribute('role', 'status');
+    row.setAttribute('aria-live', 'polite');
+    ui(row, 'aria-label', () => t('ChatGPT is thinking'));
+    ui(row, 'title', () => t('ChatGPT is thinking'));
+  } else {
+    row.removeAttribute('role');
+    row.removeAttribute('aria-live');
+    row.removeAttribute('aria-label');
+    row.removeAttribute('title');
+  }
   return row;
 }
 
@@ -3898,7 +3904,10 @@ async function refreshInputQueue(): Promise<void> {
     }
     return card;
   }));
-  paintDetail(false);
+  // Queue snapshots also project retired automatic inputs into the transcript, so this
+  // remains a full repaint. Preserve the reader's actual live-tail policy: forcing false
+  // here moved the viewport until the coalesced history reload corrected it 400 ms later.
+  paintDetail(timelineFollowBottom);
   for (const node of $('inputQueue').querySelectorAll(':scope > .queued-input')) node.remove();
   for (const helper of pausedHelpers ?? []) {
     if (helper.sourceSessionId !== selectedId) continue;
