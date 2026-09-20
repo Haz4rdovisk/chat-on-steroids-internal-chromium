@@ -32,6 +32,10 @@ the timing and frame authority; imported pets never inherit Tur Tur's timings.
   display frames. Hidden and reduced-motion static states have no running RAF.
 - Main owns library membership and task/activity snapshots. The overlay renderer
   owns only visual position, animation, pointer interaction, and presentation.
+- On Windows/macOS, native forwarded mouse movement drives renderer proximity;
+  there is no steady cursor timer. Linux retains the bounded polling fallback.
+  Pet position uses compositor transforms and props do not allocate another
+  desktop-sized layout box.
 
 ## Evidence
 
@@ -43,9 +47,11 @@ the timing and frame authority; imported pets never inherit Tur Tur's timings.
   renderer with isolated userData. It checks native 160×160 mapping, visible alpha
   bounds, task UI, pointer drag, owner restoration, independent overlay visibility,
   and restart position persistence.
-- `scripts/verify-pet-performance.cjs <label> --check` builds the production overlay
-  renderer in an isolated Electron fixture and records process CPU, renderer work,
-  and actual animation callbacks. Its checks require low idle wake frequency and
+- `scripts/verify-pet-performance.cjs <label> --full-host --check` builds the
+  production overlay renderer in an isolated Electron fixture and adds the real
+  desktop-sized transparent host plus an underlying owner window. It records
+  process CPU, pointer samples, renderer work, and actual animation callbacks.
+  Its checks require no Windows/macOS polling loop, low idle wake frequency, and
   zero RAF activity for hidden and reduced-motion static states.
 
 Source tests and isolated Electron runs do not establish packaged or installed-app

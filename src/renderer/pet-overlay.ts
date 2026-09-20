@@ -178,8 +178,7 @@ function paintView(view: PetView): void {
   const { machine, manifest, shell, body } = view;
   shell.hidden = !machine.visible;
   if (!machine.visible) return;
-  shell.style.left = `${machine.position.x}px`;
-  shell.style.top = `${machine.position.y}px`;
+  shell.style.transform = `translate3d(${machine.position.x}px, ${machine.position.y}px, 0)`;
   shell.dataset.state = machine.state;
   shell.dataset.action = machine.scene?.kind ?? '';
   const frame = machine.frame;
@@ -456,6 +455,12 @@ function rectNear(rect: DOMRect, point: PetOverlayPointer, padding = 0): boolean
   return point.x >= rect.left - padding && point.x <= rect.right + padding && point.y >= rect.top - padding && point.y <= rect.bottom + padding;
 }
 
+function petNear(view: PetView, point: PetOverlayPointer): boolean {
+  const { x, y } = view.machine.position;
+  return point.x >= x - INTERACTION_PAD && point.x <= x + PET_SIZE + INTERACTION_PAD
+    && point.y >= y - INTERACTION_PAD && point.y <= y + PET_SIZE + INTERACTION_PAD;
+}
+
 function setInteractive(next: boolean): void {
   if (interactive === next) return;
   interactive = next;
@@ -465,7 +470,7 @@ function setInteractive(next: boolean): void {
 function updateInteraction(next: PetOverlayPointer): void {
   pointer = next;
   if ([...views.values()].some(view => view.machine.pointer)) { setInteractive(true); return; }
-  const nearPet = [...views.values()].some(view => rectNear(view.shell.getBoundingClientRect(), next, INTERACTION_PAD));
+  const nearPet = [...views.values()].some(view => petNear(view, next));
   const nearTray = trayOpen && !tray.hidden && rectNear(tray.getBoundingClientRect(), next, 18);
   const nearMenu = !menu.hidden && rectNear(menu.getBoundingClientRect(), next, 10);
   setInteractive(nearPet || nearTray || nearMenu);
@@ -530,6 +535,9 @@ function applySnapshot(next: PetOverlaySnapshot): void {
 api.onLibraryChanged(applyLibrary);
 api.onSnapshot(applySnapshot);
 api.onPointer(updateInteraction);
+// Ignored transparent windows forward mouse movement on Windows/macOS. This
+// keeps proximity entirely in the renderer instead of waking main every 50 ms.
+document.addEventListener('mousemove', event => updateInteraction({ x: event.clientX, y: event.clientY }), { passive: true });
 api.onBounds(next => {
   reschedule(() => {
     bounds = next;

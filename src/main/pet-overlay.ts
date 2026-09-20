@@ -15,6 +15,7 @@ import { sessionActivityExpiresAt } from './bridge.js';
 
 const MAX_ACTIVITIES = 8;
 const POINTER_INTERVAL_MS = 50;
+const FORWARDS_IGNORED_MOUSE_MOVES = process.platform === 'win32' || process.platform === 'darwin';
 
 let ownerWindow: (() => BrowserWindow | null) | null = null;
 let activateOwner: (() => void) | null = null;
@@ -32,6 +33,8 @@ let ipcRegistered = false;
 let stopLibrary: (() => void) | null = null;
 let stopSessions: (() => void) | null = null;
 let stopSwarm: (() => void) | null = null;
+let lastSnapshotSent: string | null = null;
+let lastControlSent: PetOverlayControlState | null = null;
 
 function activePets(): number { return petLibraryState().pets.filter(pet => pet.enabled).length; }
 function shouldShow(): boolean { return globallyVisible && petLibraryState().pets.some(pet => pet.enabled && !dismissedPetIds.has(pet.id)); }
@@ -52,12 +55,25 @@ function snapshot(): PetOverlaySnapshot {
   };
 }
 
-function sendControl(): void {
+function sendControl(force = false): void {
   const owner = ownerWindow?.() ?? null;
-  if (owner && !owner.isDestroyed() && !owner.webContents.isDestroyed()) owner.webContents.send('pet-overlay:stateChanged', petOverlayControlState());
+  if (!owner || owner.isDestroyed() || owner.webContents.isDestroyed()) return;
+  const next = petOverlayControlState();
+  if (!force && lastControlSent
+    && next.visible === lastControlSent.visible
+    && next.ready === lastControlSent.ready
+    && next.activeCount === lastControlSent.activeCount
+    && next.activityCount === lastControlSent.activityCount) return;
+  lastControlSent = next;
+  owner.webContents.send('pet-overlay:stateChanged', next);
 }
-function sendSnapshot(): void {
-  if (overlay && !overlay.isDestroyed() && overlayReady) overlay.webContents.send('pet-overlay:snapshot', snapshot());
+function sendSnapshot(force = false): void {
+  if (!overlay || overlay.isDestroyed() || !overlayReady) return;
+  const next = snapshot();
+  const serialized = JSON.stringify(next);
+  if (!force && serialized === lastSnapshotSent) return;
+  lastSnapshotSent = serialized;
+  overlay.webContents.send('pet-overlay:snapshot', next);
 }
 function sendLibrary(): void {
   if (overlay && !overlay.isDestroyed() && overlayReady) overlay.webContents.send('pet-overlay:libraryChanged', petLibraryState());
@@ -74,8 +90,8 @@ function setInteractive(interactive: boolean): void {
     win.setIgnoreMouseEvents(false);
     if (process.platform === 'win32' && !win.isFocusable()) win.setFocusable(true);
   } else {
-    if (process.platform === 'win32') win.setIgnoreMouseEvents(true);
-    else win.setIgnoreMouseEvents(true, { forward: true });
+    if (FORWARDS_IGNORED_MOUSE_MOVES) win.setIgnoreMouseEvents(true, { forward: true });
+    else win.setIgnoreMouseEvents(true);
     if (win.isFocusable()) win.setFocusable(false);
   }
 }
@@ -102,9 +118,13 @@ function startPointerTracking(): void {
       win.webContents.send('pet-overlay:pointer', point);
     } catch { /* display configuration can change between reads */ }
   };
+  // Windows and macOS can forward mousemove through a click-through window.
+  // Seed the current location once, then let the renderer own pointer proximity.
+  // Linux lacks that forwarding contract and retains the bounded native poll.
+  sample();
+  if (FORWARDS_IGNORED_MOUSE_MOVES) return;
   pointerTimer = setInterval(sample, POINTER_INTERVAL_MS);
   pointerTimer.unref?.();
-  sample();
 }
 
 function fitOverlay(): void {
@@ -140,14 +160,22 @@ async function currentActivities(): Promise<{ rows: PetActivity[]; nextAt: numbe
 }
 
 export function refreshPetOverlayActivities(): void {
+  if (activePets() === 0) {
+    activities = [];
+    if (expiryTimer) clearTimeout(expiryTimer);
+    expiryTimer = null;
+    sendSnapshot(); sendControl();
+    return;
+  }
   if (refreshPending) { refreshAgain = true; return; }
   refreshPending = true;
   queueMicrotask(() => {
     void currentActivities().then(({ rows, nextAt }) => {
-      activities = rows;
+      const hasActivePets = activePets() > 0;
+      activities = hasActivePets ? rows : [];
       if (expiryTimer) clearTimeout(expiryTimer);
       expiryTimer = null;
-      if (nextAt !== null) {
+      if (hasActivePets && nextAt !== null) {
         expiryTimer = setTimeout(refreshPetOverlayActivities, Math.max(50, nextAt - Date.now() + 50));
         expiryTimer.unref?.();
       }
@@ -228,14 +256,15 @@ async function ensureOverlay(): Promise<BrowserWindow> {
   win.webContents.once('did-finish-load', () => {
     if (overlay !== win || win.isDestroyed()) return;
     overlayReady = true;
+    lastSnapshotSent = null;
     win.webContents.send('pet-overlay:bounds', bounds());
-    sendLibrary(); sendSnapshot();
+    sendLibrary(); sendSnapshot(true);
     if (shouldShow()) { win.showInactive(); startPointerTracking(); }
-    sendControl();
+    sendControl(true);
   });
   const gone = (): void => {
     if (overlay !== win) return;
-    stopPointerTracking(); overlayReady = false; overlay = null; sendControl();
+    stopPointerTracking(); overlayReady = false; overlay = null; lastSnapshotSent = null; sendControl();
   };
   win.on('closed', gone);
   win.webContents.on('render-process-gone', gone);
@@ -277,7 +306,10 @@ export async function startPetOverlay(getOwner: () => BrowserWindow | null, requ
   stopLibrary = onPetLibraryChange(state => {
     const active = new Set(state.pets.filter(pet => pet.enabled).map(pet => pet.id));
     for (const id of dismissedPetIds) if (!active.has(id)) dismissedPetIds.delete(id);
-    sendLibrary(); void syncVisibility();
+    sendLibrary();
+    if (active.size > 0) refreshPetOverlayActivities();
+    else { activities = []; sendSnapshot(); sendControl(); }
+    void syncVisibility();
   });
   stopSessions = onSessionChange(refreshPetOverlayActivities);
   stopSwarm = onSwarmChange(refreshPetOverlayActivities);
@@ -300,5 +332,6 @@ export async function shutdownPetOverlay(): Promise<void> {
   const win = overlay; overlay = null; overlayReady = false;
   if (win && !win.isDestroyed()) win.destroy();
   dismissedPetIds.clear();
+  lastSnapshotSent = null; lastControlSent = null;
   ownerWindow = null; activateOwner = null; started = false;
 }
