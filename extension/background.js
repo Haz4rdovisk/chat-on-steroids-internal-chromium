@@ -3940,7 +3940,7 @@ async function handleBrowserTabUpdated(id, changeInfo, tab = null) {
  * receive both its static manifest injection and this recovery injection.
  */
 const CHATGPT_TAB_URLS = ['https://chatgpt.com/*', 'https://chat.openai.com/*'];
-const PAGE_RECORDER_VERSION = 19;
+const PAGE_RECORDER_VERSION = 20;
 
 let deferredRecoveryWork = null;
 
