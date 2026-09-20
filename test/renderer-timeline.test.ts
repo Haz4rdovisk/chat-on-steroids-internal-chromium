@@ -1088,6 +1088,40 @@ it('keeps a newly sent message above the composer and follows its live reply unt
   expect(scrollTop).toBe(300);
 });
 
+it('shows confirmed thinking for one paint when the receipt and first response arrive together', async () => {
+  const app = await boot([]);
+  const input = app.w.document.getElementById('chatInput') as HTMLTextAreaElement;
+  input.value = 'Confirm and answer together';
+  app.w.document.getElementById('composer')!.dispatchEvent(new app.w.Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  const inputId = app.live.sent[0]!.id;
+  const frames: FrameRequestCallback[] = [];
+  Object.defineProperty(app.w, 'requestAnimationFrame', { configurable: true, value: (callback: FrameRequestCallback) => {
+    frames.push(callback); return frames.length;
+  } });
+  app.live.events.push(
+    { seq: 1, time: T0 + 1, source: 'extension', kind: 'user_message', inputId, inputDelivery: 'confirmed', messageId: `input:${inputId}`, message: text('Confirm and answer together') },
+    { seq: 2, time: T0 + 2, source: 'extension', kind: 'assistant_message', messageId: 'same-batch-answer', message: text('Answer starts'), state: 'streaming', final: false }
+  );
+  app.notifySession();
+  await settle(450);
+  const receipt = app.w.document.querySelector<HTMLElement>('.input-receipt:not([hidden])')!;
+  const thinking = app.w.document.querySelector<HTMLElement>('#inputQueue .assistant-thinking')!;
+  expect(receipt).not.toBeNull();
+  expect(thinking.classList.contains('is-reserved')).toBe(false);
+  expect(thinking.getAttribute('role')).toBe('status');
+  expect(app.w.document.querySelector('.assistant-message-content')!.textContent).toBe('');
+  let now = app.w.performance.now();
+  for (let index = 0; index < 4 && !app.w.document.querySelector('.assistant-message-content')!.textContent; index++) {
+    const frame = frames.shift();
+    expect(frame).toBeDefined();
+    frame!(now += 40);
+  }
+  expect(app.w.document.querySelector('.assistant-message-content')!.textContent).not.toBe('');
+  expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
+  expect(receipt.hidden).toBe(true);
+});
+
 it('retires thinking feedback on an error and its bounded presentation timeout', async () => {
   const app = await boot([]);
   const input = app.w.document.getElementById('chatInput') as HTMLTextAreaElement;
@@ -2127,23 +2161,67 @@ it('reveals a live assistant revision continuously and offers copy only on its f
   const target = `Start ${'flow'.repeat(40)}`;
   app.live.events.push({ ...message, seq: 2, message: text(target) });
   app.notifySession();
-  await settle(520);
   const content = () => app.w.document.querySelector<HTMLElement>('.ev-assistant_message .assistant-message-content')!.textContent?.trimEnd() ?? '';
-  expect(content().length).toBeGreaterThan('Start'.length);
+  await vi.waitFor(() => expect(content().length).toBeGreaterThan('Start'.length), { timeout: 1500, interval: 40 });
   expect(content().length).toBeLessThan(target.length);
-  await settle(400);
-  expect(content()).toBe(target);
+  const beforeExtension = content().length;
+  const extendedTarget = `${target} ${'more'.repeat(20)}`;
+  app.live.events.push({ ...message, seq: 3, message: text(extendedTarget) });
+  app.notifySession();
+  await settle(240);
+  expect(content().length).toBeGreaterThan(beforeExtension);
+  expect(content().length).toBeLessThan(extendedTarget.length);
+  await vi.waitFor(() => expect(content()).toBe(extendedTarget), { timeout: 4000, interval: 40 });
   const actions = app.w.document.querySelector<HTMLElement>('.assistant-message-actions')!;
   expect(actions.hidden).toBe(true);
-  app.live.events.push({ ...message, seq: 3, message: text(target), state: 'final', final: true });
+  const finalTarget = `${extendedTarget} ${'done'.repeat(12)}`;
+  app.live.events.push({ ...message, seq: 4, message: text(finalTarget), state: 'final', final: true });
   app.notifySession();
-  await settle(400);
+  await settle(120);
+  expect(content()).not.toBe(finalTarget);
+  expect(actions.hidden).toBe(true);
+  await vi.waitFor(() => expect(content()).toBe(finalTarget), { timeout: 2000, interval: 40 });
   expect(actions.hidden).toBe(false);
   const copy = app.w.document.querySelector<HTMLButtonElement>('.assistant-copy')!;
   expect(copy.querySelector('.ph-copy')).not.toBeNull();
   copy.click();
   await settle();
-  expect(app.live.copied).toEqual([target]);
+  expect(app.live.copied).toEqual([finalTarget]);
+});
+
+it('renders writing directives as titled document boxes without trusting their markup', async () => {
+  await boot([]);
+  const chat = await import('../src/renderer/chat.js');
+  const rendered = chat.renderedMarkdown([
+    'Before the document.',
+    '',
+    ':::writing{variant="document" id="91743" title="Bombardino-Krokodil und das Feuer unter dem Meer"}',
+    '**Kapitel eins.** <script>window.bad = true</script>',
+    ':::',
+    '',
+    'After the document.'
+  ].join('\n'));
+  const document = rendered.querySelector<HTMLElement>('.writing-block')!;
+  expect(document).not.toBeNull();
+  expect(document.dataset.writingId).toBe('91743');
+  expect(document.querySelector('.writing-block-title')!.textContent).toBe('Bombardino-Krokodil und das Feuer unter dem Meer');
+  expect(document.querySelector('.writing-block-body strong')!.textContent).toBe('Kapitel eins.');
+  expect(document.querySelector('script')).toBeNull();
+  expect(rendered.textContent).not.toContain(':::writing');
+  expect(rendered.textContent).toContain('Before the document.');
+  expect(rendered.textContent).toContain('After the document.');
+  const example = chat.renderedMarkdown('```text\n:::writing{variant="document" title="Example"} stays literal :::\n```');
+  expect(example.querySelector('.writing-block')).toBeNull();
+  expect(example.querySelector('code')!.textContent).toContain(':::writing');
+});
+
+it('presents an open writing directive while its body is still streaming', async () => {
+  await boot([]);
+  const chat = await import('../src/renderer/chat.js');
+  const rendered = chat.renderedMarkdown(':::writing{variant="document" id="live" title="Draft"} text still arriving');
+  expect(rendered.querySelector('.writing-block-title')!.textContent).toBe('Draft');
+  expect(rendered.querySelector('.writing-block-body')!.textContent).toContain('text still arriving');
+  expect(rendered.textContent).not.toContain(':::writing');
 });
 
 it('projects streaming revisions immediately when reduced motion is requested', async () => {
@@ -2383,12 +2461,24 @@ it('shows elapsed work for the exact recorded turn without exposing lifecycle ro
   expect(w.document.querySelector('#turnStatusIcon .turn-status-snake')!.hasAttribute('hidden')).toBe(false);
   expect(w.document.querySelector('#turnStatusIcon .turn-status-check')!.hasAttribute('hidden')).toBe(true);
   (w as any).api.getSessionControls = (id: string) => Promise.resolve({ ok: true, data: { sessionId: id, automation: 'off', activeTurnId: null, finishHeld: false, blocked: '', job: null } });
-  await append([{ seq: 2, time: T0 + 65_000, source: 'extension', kind: 'turn_end', turnId: 'held-turn', outcome: 'completed' }]);
+  const finalText = `Final answer ${'keeps revealing smoothly. '.repeat(16)}`.trimEnd();
+  const now = vi.spyOn(Date, 'now').mockReturnValue(T0 + 66_000);
+  await append([
+    { seq: 2, time: T0 + 64_000, source: 'extension', kind: 'assistant_message', messageId: 'held-answer', turnId: 'held-turn', message: text(finalText), state: 'final', final: true },
+    { seq: 3, time: T0 + 65_000, source: 'extension', kind: 'turn_end', turnId: 'held-turn', outcome: 'completed' }
+  ]);
+  expect(w.document.getElementById('chatState')!.textContent).toMatch(/ for 1m 6s$/);
+  expect(rail.classList).toContain('is-working');
+  now.mockReturnValue(T0 + 68_000);
+  await append([]);
+  expect(w.document.getElementById('chatState')!.textContent).toMatch(/ for 1m 8s$/);
+  await vi.waitFor(() => expect(w.document.querySelector('.assistant-message-content')!.textContent?.trimEnd()).toBe(finalText), { timeout: 5000, interval: 40 });
   expect(w.document.getElementById('chatState')!.textContent).toBe('Worked for 1m 5s');
   expect(rail.classList).toContain('is-complete');
   expect(w.document.querySelector('#turnStatusIcon .turn-status-check')!.classList).toContain('ph-check');
   expect(w.document.querySelector('#turnStatusIcon .turn-status-snake')!.hasAttribute('hidden')).toBe(true);
   expect(w.document.querySelector('#turnStatusIcon .turn-status-check')!.hasAttribute('hidden')).toBe(false);
+  now.mockRestore();
 });
 
 
@@ -2790,6 +2880,20 @@ it('blocks an empty stage, deletes it explicitly, and hides the whole dock in se
   expect(w.document.querySelectorAll('.plan-stage')).toHaveLength(1);
   w.document.getElementById('composer')!.dispatchEvent(new w.Event('submit', { cancelable: true }));
   await settle(); expect(live.sent[0]).toMatchObject({ text: 'Verify lines', stages: [] });
+});
+
+it('opens Agents & automation at its heading and restores the conversation scroll', async () => {
+  const { w } = await boot([], false);
+  const body = w.document.getElementById('chatBody')!;
+  body.scrollTop = 620;
+  const chat = await import('../src/renderer/chat.js');
+  chat.openChatView('settings');
+  expect(body.scrollTop).toBe(0);
+  body.scrollTop = 340;
+  chat.openChatView('timeline');
+  expect(body.scrollTop).toBe(620);
+  chat.openChatView('settings');
+  expect(body.scrollTop).toBe(0);
 });
 
 it('cancels pending planning without replacing the draft with a late result', async () => {
@@ -3584,8 +3688,7 @@ it.each(['empty', 'failed'])('keeps a fitting chat live after an %s older-page r
   expect(w.document.getElementById('timelineContent')!.style.getPropertyValue('--timeline-scroll-reserve')).toBe('');
   await append([{ seq: 13, time: T0 + 1, source: 'extension', kind: 'assistant_message',
     messageId: 'fresh', message: text('Still receiving live output'), final: true }]);
-  await settle(200);
-  expect(timeline.textContent).toContain('Still receiving live output');
+  await vi.waitFor(() => expect(timeline.textContent).toContain('Still receiving live output'), { timeout: 1000, interval: 40 });
   expect(read).toHaveBeenLastCalledWith(expect.any(String), { from: 13, limit: 30 });
 });
 

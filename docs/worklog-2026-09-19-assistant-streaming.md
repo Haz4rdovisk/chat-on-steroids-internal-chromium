@@ -55,3 +55,45 @@ remain the owners of message content and publication timing.
 - Impeccable detector reported only the pre-existing `side-tab` warning outside this change.
 - Internal Chromium Windows x64 packaging and packaged-runtime smoke passed. The unsigned NSIS
   installer was produced as `release/Chat-On-Steroids-Setup-x64.exe`.
+
+## Presentation pacing follow-up — 2026-09-20
+
+- Replaced the per-revision deadline, which made large recorder batches race and small batches
+  pause, with one renderer-only backlog consumer. Appended canonical revisions now extend the
+  existing visual stream without restarting it.
+- Presentation runs at a 32 ms paint cadence with a stable base rate, bounded adaptive catch-up
+  and small punctuation weights. Final publication no longer dumps its remaining text inside a
+  separate 220 ms sprint.
+- The copy action remains hidden until the final canonical text is also fully visible. Reduced
+  motion, corrected revisions, hidden windows and oversized deltas still settle immediately.
+- No recorder, store, IPC, preload or main-process timing changed. Mainstream and Internal
+  Chromium contain the same reveal implementation and tests; their shared assistant-rendering
+  section is byte-identical.
+- Both repositories passed typecheck and the three focused streaming/reduced-motion scenarios.
+  The full 198-case renderer timeline suite reached 196 passes, and its only two old 200 ms
+  paint-deadline assertions passed after being updated to await the new visual completion
+  contract. `git diff --check` passed in both trees.
+- Confirmation feedback now crosses one actual paint before the first response glyph. When a
+  confirmed user receipt and assistant snapshot arrive in the same coalesced read, the check and
+  three-dot indicator remain visible until presentation begins instead of being retired by data
+  the user cannot see yet. Tool activity and errors still retire waiting immediately.
+- A completed provider turn remains visually working while its final assistant projection has a
+  reveal backlog. “Worked for…” and its green check are published by the final reveal callback,
+  after the complete response is visible.
+- Mainstream and Internal Chromium passed typecheck, six focused presentation contracts and the
+  complete 199-case renderer timeline suite after this follow-up.
+
+## Writing blocks, Settings scroll and visual duration — 2026-09-20
+
+- Agents & automation no longer inherits the conversation scroller's bottom position. Entering
+  that Settings destination starts at its heading; returning to chat restores the prior timeline
+  position instead of moving the reader.
+- Assistant `:::writing{...}` directives now render as bounded titled document surfaces. Their
+  body keeps the existing Markdown renderer and sanitizer, malformed headers remain ordinary
+  text, attributes are bounded, and an unclosed body can render while the canonical answer is
+  still streaming.
+- Turn duration now follows the renderer's existing presentation state: seconds continue while
+  the fake stream has a visible backlog, then settle to the recorded `turn_end` duration at the
+  same moment as “Worked for” and its completion check.
+- Mainstream and Internal Chromium share the same parser, presentation-state repair and focused
+  tests. No recorder, session, IPC or browser-delivery contract changed.
