@@ -32,7 +32,7 @@ export interface ViewMenuSnapshot {
   zoomPercent: number;
   theme: 'dark' | 'light';
   appearance?: AppearanceSettings;
-  language: 'en' | 'es' | 'zh-CN' | 'zh-TW';
+  language: 'en' | 'es' | 'zh-CN' | 'zh-TW' | 'ja';
   labels: ViewMenuLabels;
 }
 

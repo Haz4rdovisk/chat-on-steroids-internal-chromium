@@ -44,6 +44,7 @@ interface BrowserHostEvent {
   type: 'updated' | 'removed';
   tabId: number;
   changeInfo?: Record<string, unknown>;
+  tab?: BrowserTabView;
 }
 
 interface BrowserTabView {
@@ -168,7 +169,9 @@ function tabView(tab: HostedTab): BrowserTabView {
 }
 
 function publishEvent(type: BrowserHostEvent['type'], tabId: number, changeInfo?: Record<string, unknown>): void {
-  events.push({ seq: ++eventSeq, type, tabId, ...(changeInfo ? { changeInfo } : {}) });
+  const tab = type === 'updated' ? tabs.get(tabId) : undefined;
+  events.push({ seq: ++eventSeq, type, tabId, ...(changeInfo ? { changeInfo } : {}),
+    ...(tab ? { tab: tabView(tab) } : {}) });
   if (events.length > MAX_EVENTS) events = events.slice(-MAX_EVENTS);
   wakeBrowserWork();
   notifyDockState();

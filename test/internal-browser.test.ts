@@ -286,9 +286,15 @@ it('emits one loading document boundary for one Electron loading cycle even if n
     generation: before.generation,
     after: before.cursor
   }) as {
-    events: Array<{ type: string; tabId: number; changeInfo?: { url?: string; status?: string } }>;
+    events: Array<{
+      type: string;
+      tabId: number;
+      tab?: { id: number };
+      changeInfo?: { url?: string; status?: string };
+    }>;
   };
   const updates = lifecycle.events.filter(event => event.type === 'updated' && event.tabId === created.tab.id);
+  expect(updates.every(event => event.tab?.id === created.tab.id)).toBe(true);
   expect(updates.filter(event => event.changeInfo?.status === 'loading')).toHaveLength(1);
   expect(updates.filter(event => event.changeInfo?.status === 'complete')).toHaveLength(1);
   expect(updates.filter(event => event.changeInfo?.url)).toEqual(expect.arrayContaining([
