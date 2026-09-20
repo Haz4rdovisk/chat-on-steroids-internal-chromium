@@ -27,3 +27,11 @@ change its native layout, without replacing Chromium's `field-sizing: content` o
   text removal and a wrapped seven-pill row; each settled at its native target after 220 ms.
 - Manual Internal Chromium smoke confirmed that repeated deletion no longer makes the options,
   model or send controls jump while the composer contracts.
+
+## Dock seam follow-up — 2026-09-20
+
+- Plan, Goal, Compact and recovery rows retain their existing 38–40px content height in both
+  empty and populated conversations.
+- The dock and composer now share only a one-pixel border seam. The previous 15px overlap let
+  the later composer paint over the dock's lower content when the normal conversation grid was
+  active, making otherwise correctly sized rows look compressed.

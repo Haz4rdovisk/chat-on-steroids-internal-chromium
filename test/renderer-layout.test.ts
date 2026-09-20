@@ -430,6 +430,14 @@ describe('the chat panel cards', () => {
     expect(tracks("[data-panel='chat'] .card.is-session")).toHaveLength(layoutChildren.length);
   });
 
+  it('joins Plan, Goal and Compact rows to the composer without covering their content', () => {
+    const dock = rule('.composer-dock');
+    const joined = rule(".composer-dock:not([hidden]):has(> :not([hidden])) + .composer");
+    expect(dock).toContain('margin: 10px auto -1px');
+    expect(dock).not.toContain('margin: 10px auto -15px');
+    expect(joined).toContain('margin-top: 0');
+  });
+
   /**
    * The flexible track must be the scrolling body and nothing else. When it landed on
    * `.subhead`, an empty Compaction view pushed the switcher into the middle of the card.
