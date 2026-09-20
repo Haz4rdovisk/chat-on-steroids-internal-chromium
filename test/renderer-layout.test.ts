@@ -89,6 +89,22 @@ it('keeps Agents & automation on the shared settings canvas with its model actio
   expect(document.getElementById('swarmReset')!.closest('.pane')?.previousElementSibling?.querySelector('h2')?.textContent).toBe('Workers & recovery');
 });
 
+it('uses the same navigation typography in the chat and settings sidebars', () => {
+  expect(rule('.sidebar-primary .new-chat, .sidebar .sidebar-primary-link')).toContain('min-height: 38px');
+  expect(rule('.sidebar-primary .new-chat, .sidebar .sidebar-primary-link')).toContain('font-size: calc(13px * var(--text-scale, 1))');
+  expect(rule('nav button')).toContain('min-height: 38px');
+  expect(rule('nav button')).toContain('font-size: calc(13px * var(--text-scale, 1))');
+  expect(rule('nav button')).toContain('font-weight: 550');
+});
+
+it('reveals settings navigation inside the sidebar without animating its shell geometry', () => {
+  expect(rule(".app[data-screen='settings'] #backToChat")).toContain('animation: sidebar-content-in 170ms cubic-bezier(.16, 1, .3, 1)');
+  expect(rule(".app[data-screen='settings'] #tabs,\n.app[data-screen='chat'] .sidebar-sessions")).toContain('animation: sidebar-content-in 200ms cubic-bezier(.16, 1, .3, 1)');
+  expect(rule(".app[data-screen='chat'] #sidebarPrimary")).toContain('animation: sidebar-content-in 170ms cubic-bezier(.16, 1, .3, 1)');
+  expect(css).toContain('@keyframes sidebar-content-in { from { opacity: .35; transform: translateX(-6px); clip-path: inset(0 0 0 8px); }');
+  expect(rule('.sidebar')).not.toContain('sidebar-content-in');
+});
+
 it('groups Appearance into the shared settings sections without moving its controls or reset scope', () => {
   const panel = document.getElementById('appearancePanel')!;
   const content = panel.querySelector('.appearance-content')!;
@@ -261,8 +277,11 @@ describe('the session card header', () => {
 
   it('has a place to say what is happening without opening the Activity log', () => {
     const note = document.getElementById('chatState')!;
-    expect(note.closest('.subhead')).not.toBeNull();
-    expect(rule('.subhead-note')).toContain('text-overflow: ellipsis');
+    const rail = note.closest('.turn-status-rail')!;
+    expect(rail.nextElementSibling?.id).toBe('composerDock');
+    expect(rule('.turn-status-rail')).toContain('max-width: 860px');
+    expect(rule('.turn-status-copy')).toContain('text-overflow: ellipsis');
+    expect(rule('.turn-status-rail:not([hidden]) ~ .composer')).toContain('margin-top: 4px');
   });
 });
 
@@ -402,9 +421,9 @@ describe('the chat panel cards', () => {
 
   it('gives the session card one row per child, including its navigation row', () => {
     const card = document.getElementById('chatBody')!.closest('.card')!;
-    // Subhead, scrolling conversation, shared plan/queue dock, composer and footer.
+    // Subhead, scrolling conversation, turn status, shared plan/queue dock, composer and footer.
     const layoutChildren = [...card.children].filter(child => child.id !== 'chatSettingsBtn');
-    expect(layoutChildren.length).toBe(5);
+    expect(layoutChildren.length).toBe(6);
     expect(document.getElementById('composerDock')!.firstElementChild?.id).toBe('agentPlan');
     expect(document.getElementById('inputQueue')!.closest('#chatBody')).not.toBeNull();
     expect(card.classList.contains('is-session')).toBe(true);

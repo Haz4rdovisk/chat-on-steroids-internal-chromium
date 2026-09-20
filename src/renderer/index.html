@@ -739,8 +739,6 @@
                 <button class="is-sel" data-view="timeline" type="button">Timeline</button>
                 <button data-view="compact" type="button">Handoff</button>
               </span>
-              <span class="subhead-note" id="chatState"></span>
-
             </div>
 
             <div class="scroll" id="chatBody">
@@ -989,6 +987,22 @@
                   </div>
 
               </div>
+            </div>
+            <div class="turn-status-rail" id="turnStatus" hidden>
+              <span class="turn-status-indicator" id="turnStatusIcon" aria-hidden="true">
+                <svg class="turn-status-snake" viewBox="0 0 16 16">
+                  <rect class="turn-status-snake-segment" x="1" y="1" width="3" height="3" rx=".5" />
+                  <rect class="turn-status-snake-segment" x="6.5" y="1" width="3" height="3" rx=".5" />
+                  <rect class="turn-status-snake-segment" x="12" y="1" width="3" height="3" rx=".5" />
+                  <rect class="turn-status-snake-segment" x="12" y="6.5" width="3" height="3" rx=".5" />
+                  <rect class="turn-status-snake-segment" x="12" y="12" width="3" height="3" rx=".5" />
+                  <rect class="turn-status-snake-segment" x="6.5" y="12" width="3" height="3" rx=".5" />
+                  <rect class="turn-status-snake-segment" x="1" y="12" width="3" height="3" rx=".5" />
+                  <rect class="turn-status-snake-segment" x="1" y="6.5" width="3" height="3" rx=".5" />
+                </svg>
+                <i class="ico ph ph-check turn-status-check" hidden></i>
+              </span>
+              <span class="turn-status-copy" id="chatState"></span>
             </div>
             <div class="composer-dock" id="composerDock"><section class="agent-plan" id="agentPlan" aria-label="Agent task plan" hidden></section><div id="recoveryStatus" role="status" hidden></div><div id="taskPlanPreview" aria-label="Plan stages" hidden></div><div id="finishQueue" aria-label="Queued tasks" hidden></div><div id="activeGoalRow" hidden></div></div>
             <form class="composer" id="composer">
