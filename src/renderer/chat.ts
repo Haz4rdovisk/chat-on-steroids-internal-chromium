@@ -22,6 +22,7 @@ import type { RecoveryCountdown } from '../shared/recovery.js';
 import { communicationTitle, foldAgentCommunication } from './agent-communication.js';
 import { initContextMeter, paintContextMeter } from './context-meter.js';
 import { installComposerHeightMotion } from './composer-motion.js';
+import { createTextReveal, type TextReveal } from './text-reveal.js';
 import { isAstraModel, isProModel } from '../shared/chat-models.js';
 import type { InputImage, InputAttachment, InputAutomation } from '../shared/input.js';
 import { injectableAttachments, queuedFollowup, MAX_INPUT_IMAGES } from '../shared/input.js';
@@ -132,6 +133,9 @@ let activeId: string | null = null;
 let selectedId: string | null = null;
 let newChatSelected = true;
 let selectedProjectId: string | null = null;
+/** Presentation intent for the live tail. Sending/selecting follows it; an explicit
+ * upward reader gesture releases it until the user returns to the bottom. */
+let timelineFollowBottom = true;
 let projects: LocalProject[] = [];
 /** Window-local disclosure intent. Project groups start closed until the user or selection opens one. */
 const expandedProjects = new Set<string>();
@@ -175,6 +179,9 @@ const inputDrafts = new Map<string, string>();
 const newChatTasks = new Map<string, { objective: string; automation: string; loopDelivery: string }>();
 const imageDrafts = new Map<string, Array<InputImage | InputAttachment>>();
 const startingInputs = new Map<string, InputEntry>();
+const THINKING_FEEDBACK_TIMEOUT_MS = 120_000;
+type ThinkingFeedback = { inputId: string; sessionId: string | null; afterSeq: number; confirmed: boolean; timeout: number | null };
+const thinkingFeedback = new Map<string, ThinkingFeedback>();
 const visibleInputIds = new Set<string>();
 // Window-local presentation only: a new incident or changed status is visible again.
 const dismissedRecoveryNotices = new Map<string, string>();
@@ -1328,6 +1335,7 @@ async function loadDetail(navigate = false, olderBefore?: number, newerFrom?: nu
   }
   // An empty older page is not navigation. Keep the live cursor and viewport intact.
   if (prepend && !detail.events.length) return true;
+  clearSettledThinkingFeedback(wanted, detail.events);
   // User/assistant prose is canonical in messages.json, while structured page activity stays
   // append-only by design: ChatGPT can grow one commentary caption or rewrite one activity
   // label several times. `foldProgress` turns those snapshots back into the one logical row
@@ -1356,7 +1364,7 @@ async function loadDetail(navigate = false, olderBefore?: number, newerFrom?: nu
       : detail.events.reduce((cursor, event) => Math.max(cursor, event.seq + 1), incremental ? detailCursor! : 0));
   totalEvents = detail.total;
   if (opening) $('timelineContent').style.removeProperty('--timeline-scroll-reserve');
-  paintDetail(!prepend && newerFrom === undefined);
+  paintDetail(!prepend && newerFrom === undefined, incremental);
   // A selection opens at the latest message; the previous chat's viewport is not
   // a reading position in this one. Apply only after the current load has rendered.
   if (opening) $('chatBody').scrollTop = $('chatBody').scrollHeight;
@@ -1623,6 +1631,90 @@ export function renderedMessage(html: StoredText | null | undefined, fallback: s
   return box;
 }
 
+interface AssistantProjection {
+  capture?: StoredText;
+  content: HTMLElement;
+  final: boolean;
+  reveal: TextReveal;
+}
+
+const assistantProjections = new WeakMap<HTMLElement, AssistantProjection>();
+
+function paintAssistantContent(box: HTMLElement, state: AssistantProjection, visible: string, settled: boolean): void {
+  const pane = box.isConnected ? $('chatBody') : null;
+  const paneTop = pane?.getBoundingClientRect().top ?? 0;
+  const before = pane ? box.getBoundingClientRect() : null;
+  const content = renderedMarkdown(visible, settled ? state.capture : undefined);
+  content.classList.add('assistant-message-content');
+  state.content.replaceWith(content);
+  state.content = content;
+  if (pane && timelineFollowBottom) pane.scrollTop = pane.scrollHeight;
+  else if (pane && before && before.bottom <= paneTop) pane.scrollTop += box.getBoundingClientRect().height - before.height;
+}
+
+function updateAssistantBox(
+  box: HTMLElement,
+  event: Extract<SessionEvent, { kind: 'assistant_message' }>,
+  animate: boolean
+): void {
+  const source = withoutMessageReaction(event.message.text).slice(0, MAX_RENDERED_HTML_CHARS);
+  let state = assistantProjections.get(box);
+  if (!state) {
+    const content = renderedMarkdown('');
+    content.classList.add('assistant-message-content');
+    state = { content, capture: event.renderedHtml, final: event.final === true } as AssistantProjection;
+    state.reveal = createTextReveal((visible, settled) => paintAssistantContent(box, state!, visible, settled));
+    assistantProjections.set(box, state);
+    box.append(content);
+  }
+  state.capture = event.renderedHtml;
+  state.final = event.final === true;
+  box.classList.toggle('is-streaming', !state.final);
+  const actions = box.querySelector<HTMLElement>(':scope > .assistant-message-actions');
+  if (actions) actions.hidden = !state.final;
+  const label = box.querySelector<HTMLElement>(':scope > b');
+  if (label) ui(label, 'textContent', () => state!.final ? 'ChatGPT' : t("ChatGPT (partial)"));
+  state.reveal.update(source, { animate, final: state.final });
+}
+
+function assistantBox(event: Extract<SessionEvent, { kind: 'assistant_message' }>, animate: boolean): HTMLElement {
+  const box = el('div', 'said assistant-response');
+  box.append(el('b'));
+  updateAssistantBox(box, event, animate);
+  const actions = el('div', 'assistant-message-actions');
+  actions.hidden = event.final !== true;
+  const copy = el('button', 'assistant-copy') as HTMLButtonElement;
+  copy.type = 'button';
+  ui(copy, 'aria-label', () => t('Copy'));
+  ui(copy, 'title', () => t('Copy'));
+  copy.append(icon('i-copy'));
+  copy.addEventListener('click', async () => {
+    const value = assistantProjections.get(box)?.reveal.value() ?? '';
+    if (!value || !await run(api.writeClipboard(value))) return;
+    toast(t('Copied'));
+  });
+  actions.append(copy);
+  box.append(actions);
+  return box;
+}
+
+function patchAssistantRow(
+  row: HTMLElement,
+  event: Extract<SessionEvent, { kind: 'assistant_message' }>,
+  animate: boolean
+): boolean {
+  const box = row.querySelector<HTMLElement>('.assistant-response');
+  if (!box) return false;
+  updateAssistantBox(box, event, animate);
+  row.hidden = !withoutMessageReaction(event.message.text).trim();
+  const time = row.querySelector('time');
+  if (time) {
+    time.textContent = clockTime(event.time);
+    time.title = new Date(event.time).toLocaleString();
+  }
+  return true;
+}
+
 /**
  * Tool calls the user has opened, by their durable call id.
  *
@@ -1837,6 +1929,7 @@ function paintInputReceipt(row: HTMLElement, item: ReturnType<typeof timelineIte
   const receipt = row.querySelector<HTMLElement>('.input-receipt');
   if (!receipt) return;
   receipt.hidden = hasLaterModelActivity(item.event.time);
+  if (!receipt.hidden && item.event.inputId) confirmThinkingFeedback(item.event.inputId);
   receipt.parentElement?.classList.toggle('has-input-receipt', !receipt.hidden);
 }
 
@@ -1865,7 +1958,7 @@ function paintMessageReaction(box: HTMLElement, value: unknown): void {
   if (!existing) box.append(badge);
 }
 
-function eventBody(event: SessionEvent, context?: { id: string; current: () => boolean; history: readonly SessionEvent[] }): HTMLElement {
+function eventBody(event: SessionEvent, context?: { id: string; current: () => boolean; history: readonly SessionEvent[] }, animateAssistant = false): HTMLElement {
   switch (event.kind) {
     case 'session_start':
       return el('p', 'meta', () => t("Session started — {0}", [event.title]));
@@ -1928,10 +2021,7 @@ function eventBody(event: SessionEvent, context?: { id: string; current: () => b
       return box;
     }
     case 'assistant_message': {
-      const box = el('div', 'said');
-      box.append(el('b', '', () => event.final ? 'ChatGPT' : t("ChatGPT (partial)")));
-      box.append(renderedMarkdown(event.message.text, event.renderedHtml));
-      return box;
+      return assistantBox(event, animateAssistant);
     }
     case 'native_image': {
       const box = el('div', 'said native-image');
@@ -2057,7 +2147,7 @@ function eventBody(event: SessionEvent, context?: { id: string; current: () => b
   }
 }
 
-function eventRow(event: SessionEvent): HTMLElement {
+function eventRow(event: SessionEvent, animateAssistant = false): HTMLElement {
   const row = el('div', `ev ev-${event.kind}`);
   if (event.kind === 'assistant_message' && !withoutMessageReaction(event.message.text).trim()) row.hidden = true;
   tagImageRow(row, event);
@@ -2069,7 +2159,7 @@ function eventRow(event: SessionEvent): HTMLElement {
   if (event.agent && event.agent !== 'prime' && !(currentWorker?.kind === 'worker' && currentWorker.agentId === event.agent)) {
     body.append(el('span', 'chip', event.agent));
   }
-  body.append(eventBody(event));
+  body.append(eventBody(event, undefined, animateAssistant));
   // A refused call from a chat Compact & Resume already replaced is not a placement failure:
   // its request id proved exactly which chat it came from, and that chat's stopped turn simply
   // kept calling from OpenAI's side. Say so beside the row, or a full Unattributed bucket of
@@ -2584,7 +2674,7 @@ function composerSessionSelection(summary: SessionSummary | null | undefined) {
   const opening = pendingComposerInputs.find(row => row.opening && row.sessionId === summary?.id && ['queued', 'browser'].includes(row.state));
   return opening?.model ? { model: opening.model, reasoningEffort: opening.reasoningEffort ?? undefined, observedAt: opening.createdAt } : null;
 }
-function paintDetail(followBottom = historyBefore === null): void {
+function paintDetail(followBottom = historyBefore === null, animateAssistant = false): void {
   paintStateLine();
   const summary = sessions.find((s) => s.id === selectedId) ?? null;
   applyComposerSessionModel(selectedId ? `${selectedId}:${selectionGeneration}` : null, composerSessionSelection(summary) ?? null);
@@ -2617,7 +2707,7 @@ function paintDetail(followBottom = historyBefore === null): void {
   // Preserve the visible logical row when late transcript revisions change the
   // height above it; retaining absolute scrollTop would move the reader's content.
   const pane = $('chatBody');
-  const restoreViewport = preserveTimelineViewport(pane, $('timelineContent'), followBottom);
+  const restoreViewport = preserveTimelineViewport(pane, $('timelineContent'), followBottom && timelineFollowBottom);
   const timelineRows: HTMLElement[] = [];
   const keep = new Set<string>();
   let activityBoundary = '';
@@ -2668,7 +2758,11 @@ function paintDetail(followBottom = historyBefore === null): void {
       timelineRows.push(cached.row);
       continue;
     }
-    const row = item.kind === 'compaction' ? compactionRow(item.block, cached?.row) : eventRow(item.event);
+    const patchedAssistant = item.kind === 'event' && item.event.kind === 'assistant_message' && cached
+      ? patchAssistantRow(cached.row, item.event, animateAssistant)
+      : false;
+    const row = patchedAssistant ? cached!.row
+      : item.kind === 'compaction' ? compactionRow(item.block, cached?.row) : eventRow(item.event, animateAssistant);
     row.dataset.timelineKey = key;
     row.dataset.activityBoundary = activityBoundary;
     paintInputReceipt(row, item);
@@ -2705,6 +2799,14 @@ function paintDetail(followBottom = historyBefore === null): void {
   $('chatFoot').textContent = facts.join(' · ');
   $('chatFoot').hidden = !deps.state()?.config.ui.developerMode;
   $('chatFoot').classList.toggle('is-warn', pressureOf(selectedId ?? '')?.level === 'huge');
+}
+
+/** A newly authored input elects the live tail before any asynchronous queue read. */
+function revealNewestInput(): void {
+  timelineFollowBottom = true;
+  paintDetail(true);
+  const pane = $('chatBody');
+  pane.scrollTop = pane.scrollHeight;
 }
 
 // -------------------------------------------------------------------- handoff
@@ -3463,6 +3565,61 @@ function historicalAutomaticInput(entry: InputEntry): boolean {
     entry.state === 'cancelled' && !!entry.error;
 }
 
+/** Ephemeral renderer feedback only. Delivery and turn state remain owned by the outbox/history. */
+function clearThinkingFeedback(inputId: string, repaint = true): void {
+  const feedback = thinkingFeedback.get(inputId);
+  if (!feedback) return;
+  if (feedback.timeout !== null) window.clearTimeout(feedback.timeout);
+  thinkingFeedback.delete(inputId);
+  if (repaint) paintPendingInputs();
+}
+
+function armThinkingFeedback(inputId: string, sessionId: string | null): void {
+  clearThinkingFeedback(inputId, false);
+  const afterSeq = detailCursor ?? events.reduce((next, event) => Math.max(next, event.seq + 1), 0);
+  thinkingFeedback.set(inputId, { inputId, sessionId, afterSeq, confirmed: false, timeout: null });
+}
+
+function confirmThinkingFeedback(inputId: string): void {
+  const feedback = thinkingFeedback.get(inputId);
+  if (!feedback || feedback.confirmed) return;
+  feedback.confirmed = true;
+  feedback.timeout = window.setTimeout(() => clearThinkingFeedback(inputId), THINKING_FEEDBACK_TIMEOUT_MS);
+}
+
+function adoptThinkingFeedback(inputId: string, sessionId: string): void {
+  const feedback = thinkingFeedback.get(inputId);
+  if (feedback) feedback.sessionId = sessionId;
+}
+
+function clearSettledThinkingFeedback(sessionId: string, incoming: readonly SessionEvent[]): void {
+  for (const feedback of thinkingFeedback.values()) {
+    if (feedback.sessionId !== sessionId || !incoming.some(event => event.seq >= feedback.afterSeq &&
+      (event.kind === 'chat_error' || event.kind === 'native_image' || event.kind === 'tool_call' || event.kind === 'page_tool' || event.kind === 'agent_message' ||
+        (event.kind === 'assistant_message' && !!withoutMessageReaction(event.message.text).trim())))) continue;
+    clearThinkingFeedback(feedback.inputId, false);
+  }
+}
+
+function currentThinkingFeedback(): ThinkingFeedback | null {
+  if (selectedId) return [...thinkingFeedback.values()].reverse().find(feedback => feedback.confirmed && feedback.sessionId === selectedId) ?? null;
+  const pending = pendingNewInput?.generation === selectionGeneration ? pendingNewInput.id : null;
+  const feedback = pending ? thinkingFeedback.get(pending) ?? null : null;
+  return feedback?.confirmed ? feedback : null;
+}
+
+function thinkingFeedbackRow(feedback: ThinkingFeedback, existing?: HTMLElement | null): HTMLElement {
+  if (existing?.dataset.inputId === feedback.inputId) return existing;
+  const row = el('div', 'assistant-thinking');
+  row.dataset.inputId = feedback.inputId;
+  row.setAttribute('role', 'status');
+  row.setAttribute('aria-live', 'polite');
+  ui(row, 'aria-label', () => t('ChatGPT is thinking'));
+  ui(row, 'title', () => t('ChatGPT is thinking'));
+  row.append(...[0, 1, 2].map(() => el('span', 'assistant-thinking-dot')));
+  return row;
+}
+
 function inputMessageRow(entry: InputEntry, notice: boolean): HTMLElement {
   const row = el('div', 'pending-message');
   row.classList.toggle('is-delivered', !entry.error && ['sent', 'tool'].includes(entry.state));
@@ -3489,6 +3646,7 @@ function inputMessageRow(entry: InputEntry, notice: boolean): HTMLElement {
   }
   else receipt.append(icon(['sent', 'tool'].includes(entry.state) ? 'i-check' : 'i-clock'));
   receipt.hidden = !entry.error && ['sent', 'tool'].includes(entry.state) && hasLaterModelActivity(entry.deliveredAt ?? entry.offeredAt ?? entry.createdAt);
+  if (!receipt.hidden && !entry.error && ['sent', 'tool'].includes(entry.state)) confirmThinkingFeedback(entry.id);
   row.append(receipt);
   if (notice) {
     const dismiss = dockAction(() => t("Dismiss delivery notice"), 'i-x', () => {});
@@ -3522,7 +3680,7 @@ function inputMessageRow(entry: InputEntry, notice: boolean): HTMLElement {
     cancel.onclick = async () => {
       cancel.disabled = true;
       const result = await run(api.cancelInput(entry.id));
-      if (result) dismissInputNotice(entry.id);
+      if (result) { clearThinkingFeedback(entry.id, false); dismissInputNotice(entry.id); }
       void refreshInputQueue();
     };
     row.append(cancel);
@@ -3545,6 +3703,7 @@ async function adoptAcceptedOpening(entry: InputEntry): Promise<boolean> {
   if (!summary) summary = (await run(api.getSession(id, { limit: 1 })))?.summary ?? undefined;
   if (!summary || pendingNewInput !== pending || pending.generation !== selectionGeneration || selectedId !== null) return false;
   pendingNewInput = null;
+  adoptThinkingFeedback(entry.id, id);
   mergeSessionRows([summary]);
   const from = draftKey();
   inputDrafts.set(summary.id, authoredComposerText());
@@ -3587,8 +3746,10 @@ function paintPendingInputs(): void {
     if (old?.dataset.inputSignature === sig) return old;
     const row = inputMessageRow(entry, notice(entry)); row.dataset.inputSignature = sig; return row;
   });
+  const feedback = currentThinkingFeedback();
+  const thinking = feedback ? thinkingFeedbackRow(feedback, host.querySelector<HTMLElement>(':scope > .assistant-thinking')) : null;
   // Helper controls have their own owner and are refreshed by the queue read below.
-  reconcileChildren(host, [...next, ...host.querySelectorAll<HTMLElement>(':scope > .queued-input')]);
+  reconcileChildren(host, [...next, ...(thinking ? [thinking] : []), ...host.querySelectorAll<HTMLElement>(':scope > .queued-input')]);
 }
 async function refreshInputQueue(): Promise<void> {
   const request = ++inputQueueGeneration;
@@ -3596,6 +3757,7 @@ async function refreshInputQueue(): Promise<void> {
   const [all, pausedHelpers] = await Promise.all([run(api.listInputs()), run(api.listPausedHelpers())]);
   if (!all || selection !== selectionGeneration || request !== inputQueueGeneration) return;
   pendingComposerInputs = all;
+  for (const entry of all) if (entry.error || ['failed', 'cancelled'].includes(entry.state) || queuedFollowup(entry)) clearThinkingFeedback(entry.id, false);
   for (const id of dismissedInputNotices) if (!all.some(entry => entry.id === id)) dismissedInputNotices.delete(id);
   paintDeliveryControls();
   const accepted = pendingNewInput && all.find(entry => entry.id === pendingNewInput!.id);
@@ -3775,7 +3937,7 @@ async function retryPlannedInput(entry: InputEntry): Promise<void> {
     }
     startingInputs.set(args.id, { ...args, state: 'queued', owner: null, createdAt: args.dueAt, conversationId: null });
     if (sessionId === null) pendingNewInput = { id: args.id, generation };
-    paintDeliveryControls(); void refreshInputQueue();
+    paintDeliveryControls(); revealNewestInput(); void refreshInputQueue();
     const result = await run(api.sendInput(args));
     if (cancelledStarts.has(args.id)) return;
     if (!result) return;
@@ -3796,7 +3958,10 @@ async function stopCurrentTurn(): Promise<void> {
   if (!id || controlledSessionId !== id || controlledSelection !== generation || !turnId || controlledStopPending) return;
   controlledStopPending = true; paintDeliveryControls();
   try { await run(api.stopSessionTurn(id, turnId)); }
-  finally { if (selectedId === id && selectionGeneration === generation) { controlledStopPending = false; void refreshSessionControls(); } }
+  finally {
+    for (const feedback of thinkingFeedback.values()) if (feedback.sessionId === id) clearThinkingFeedback(feedback.inputId, false);
+    if (selectedId === id && selectionGeneration === generation) { controlledStopPending = false; paintPendingInputs(); void refreshSessionControls(); }
+  }
 }
 let composerDiscoveryGeneration = 0;
 async function sendComposer(delivery?: 'finish', plan?: string[], planObjective?: string): Promise<boolean | void> {
@@ -3829,6 +3994,7 @@ async function sendComposer(delivery?: 'finish', plan?: string[], planObjective?
       if (wasStarting) cancelledStarts.add(pending.id);
       const cancelled = await run(api.cancelInput(pending.id));
       if (cancelled) {
+        clearThinkingFeedback(pending.id, false);
         startingInputs.delete(pending.id);
         pendingComposerInputs = pendingComposerInputs.filter(row => row.id !== pending.id);
         dismissInputNotice(pending.id);
@@ -3870,6 +4036,8 @@ async function sendComposer(delivery?: 'finish', plan?: string[], planObjective?
   skillPicker?.restore();
   imageDrafts.delete(key); paintComposerImages();
   if (sessionId === null) pendingNewInput = { id, generation };
+  if (mode === 'auto') armThinkingFeedback(id, sessionId);
+  revealNewestInput();
   void refreshInputQueue();
   paintDeliveryControls();
   try {
@@ -3880,6 +4048,7 @@ async function sendComposer(delivery?: 'finish', plan?: string[], planObjective?
       // queue/error visible rather than restoring a second copy into the composer.
       const retained = (await run(api.listInputs()))?.find(row => row.id === id);
       if (retained) {
+        if (retained.error || ['failed', 'cancelled'].includes(retained.state) || queuedFollowup(retained)) clearThinkingFeedback(id, false);
         pendingComposerInputs = [...pendingComposerInputs.filter(row => row.id !== id), retained];
         await adoptAcceptedOpening(retained);
         return true;
@@ -3891,12 +4060,14 @@ async function sendComposer(delivery?: 'finish', plan?: string[], planObjective?
       if (images.length) imageDrafts.set(key, [...images, ...(imageDrafts.get(key) ?? [])]);
       if (draftKey() === key) paintComposerImages();
       if (pendingNewInput?.id === id) pendingNewInput = null;
+      clearThinkingFeedback(id);
       return;
     }
     // The accepted IPC result is newer than any queue read started before it. Keep
     // that durable row visible while the next listing crosses the process boundary.
     inputQueueGeneration++;
     pendingComposerInputs = [...pendingComposerInputs.filter(row => row.id !== result.id), result];
+    if (result.error || ['failed', 'cancelled'].includes(result.state) || queuedFollowup(result)) clearThinkingFeedback(id, false);
     if (sessionId === null && selectionGeneration === generation && pendingNewInput?.id === id && result.automation &&
         ($<HTMLSelectElement>('chatAutomation').value !== result.automation || openingLoopDelivery() !== result.loopAfterTurn))
       await run(api.setInputAutomation(result.id, $<HTMLSelectElement>('chatAutomation').value as InputAutomation, openingLoopDelivery()));
@@ -3954,6 +4125,7 @@ function selectSession(id: string): void {
   ui($<HTMLTextAreaElement>('chatInput'), 'placeholder', () => t("Ask anything…"));
   restoreDraft();
   if (ownerChanged) {
+    timelineFollowBottom = true;
     // Retire the prior owner now; retain only its inert painted transcript until the
     // selected detail arrives. Existing async image/load generation fences still apply.
     events = [];
@@ -3979,6 +4151,7 @@ function selectSession(id: string): void {
 
 function selectNewChat(projectId: string | null = null): void {
   rememberDraft(); selectionGeneration++; replaceComposerDraft(); pendingNewInput = null;
+  timelineFollowBottom = true;
   inputQueueGeneration++;
   $('finishQueue').replaceChildren(); $('finishQueue').hidden = true;
   newChatSelected = true; selectedId = null; selectedProjectId = projectId; detailFor = null; detailCursor = null;
@@ -4149,7 +4322,7 @@ export function initChat(next: Deps): void {
             loopAfterTurn: openingLoopDelivery(),
             mode: 'auto', dueAt, model, reasoningEffort, state: 'queued', owner: null, createdAt: dueAt, conversationId: null };
           startingInputs.set(inputId, entry); pendingNewInput = { id: inputId, generation: selection };
-          goalProgress = { requestId, selection, inputId, phase: 'queued', text: '' }; paintDeliveryControls();
+          goalProgress = { requestId, selection, inputId, phase: 'queued', text: '' }; paintDeliveryControls(); revealNewestInput();
           try {
             const accepted = await run(api.sendInput(entry));
             if (accepted) { inputQueueGeneration++; pendingComposerInputs = [...pendingComposerInputs.filter(row => row.id !== inputId), accepted];
@@ -4326,6 +4499,7 @@ export function initChat(next: Deps): void {
   let pendingScrollDirection = 0;
   historyPane.addEventListener('wheel', event => {
     pendingScrollDirection = Math.sign(event.deltaY);
+    if (pendingScrollDirection < 0) timelineFollowBottom = false;
     requestHistory(pendingScrollDirection);
   }, { passive: true });
   let pointerScrollTop: number | null = null;
@@ -4333,18 +4507,24 @@ export function initChat(next: Deps): void {
   window.addEventListener('pointerup', () => { pointerScrollTop = null; });
   historyPane.addEventListener('keydown', event => {
     pendingScrollDirection = ['ArrowUp', 'PageUp', 'Home'].includes(event.key) ? -1 : ['ArrowDown', 'PageDown', 'End'].includes(event.key) ? 1 : 0;
+    if (pendingScrollDirection < 0) timelineFollowBottom = false;
     requestHistory(pendingScrollDirection);
   });
   historyPane.addEventListener('scroll', () => {
+    let userDirection = 0;
     if (pointerScrollTop !== null) {
       const direction = Math.sign(historyPane.scrollTop - pointerScrollTop);
       pointerScrollTop = historyPane.scrollTop;
+      userDirection = direction;
       requestHistory(direction);
     } else if (pendingScrollDirection) {
       const direction = pendingScrollDirection;
       pendingScrollDirection = 0;
+      userDirection = direction;
       requestHistory(direction);
     }
+    if (userDirection < 0) timelineFollowBottom = false;
+    else if (userDirection > 0 && historyPane.scrollTop + historyPane.clientHeight >= historyPane.scrollHeight - 40) timelineFollowBottom = true;
     if (historyDemand) void fillTimelineHistory();
   }, { passive: true });
   $('timeline').addEventListener('click', event => {

@@ -201,7 +201,7 @@ async function boot(events: SessionEvent[], selectExisting = true, pausedHelpers
     update: { current: '2.0.3', latest: null, stage: 'idle', error: null, checkedAt: null }
   };
   const ok = (data: any) => Promise.resolve({ ok: true, data });
-  const live = { events: [...events], inputs: [] as InputEntry[], sent: [] as InputArgs[], automation: 'off', controlCalls: [] as Array<{ id: string; action: string }>, compacting: false, finishHeld: true };
+  const live = { events: [...events], inputs: [] as InputEntry[], sent: [] as InputArgs[], copied: [] as string[], automation: 'off', controlCalls: [] as Array<{ id: string; action: string }>, compacting: false, finishHeld: true };
   let sessionListener: () => void = () => undefined;
   let writeSessionListener: (id: string) => void = () => undefined;
   const taskProgressListeners = new Set<(progress: any) => void>();
@@ -266,6 +266,7 @@ async function boot(events: SessionEvent[], selectExisting = true, pausedHelpers
         live.inputs.push(row);
         return ok(row);
       },
+      writeClipboard: (value: string) => { live.copied.push(value); return ok(true); },
       getSession: (_id: string, options?: { from?: number; before?: number; after?: number; limit?: number }) => {
         const from = options?.from ?? 0;
         const eligible = live.events.filter((event) => event.seq >= from &&
@@ -328,6 +329,7 @@ it('patches native reactions in place and hides streamed envelopes without chang
   }
   expect(bubble.textContent).toContain('Question');
   await append([{ ...answer, seq: 7, origin: 2, message: text('\uE200message_reaction\uE202😂\uE201\nThe answer.'), final: true }]);
+  await settle(200);
   expect(w.document.querySelector('.ev-assistant_message .msg')?.textContent?.trim()).toBe('The answer.');
   expect(w.document.querySelector('.message-reaction')).toBeNull(); // Never infer a target from adjacency.
 });
@@ -1033,6 +1035,83 @@ it.each(['image', 'txt', 'mixed', 'new-chat', 'after-turn'])('routes the compose
   expect(app.live.sent).toHaveLength(1);
   expect(app.live.sent[0]).toMatchObject({ text: 'Please look at the attached files.', attachments: files });
   expect(app.live.sent[0]!.attachmentDelivery).toBe(kind === 'image' ? 'tool' : undefined);
+});
+
+it('keeps a newly sent message above the composer and follows its live reply until the reader scrolls up', async () => {
+  const app = await boot([]);
+  const pane = app.w.document.getElementById('chatBody')!;
+  let scrollTop = 0;
+  Object.defineProperties(pane, {
+    clientHeight: { value: 100 },
+    scrollHeight: { get: () => 400 },
+    scrollTop: { get: () => scrollTop, set: value => { scrollTop = Math.max(0, Math.min(value, 300)); } }
+  });
+  const input = app.w.document.getElementById('chatInput') as HTMLTextAreaElement;
+  input.value = 'Keep this visible';
+  app.w.document.getElementById('composer')!.dispatchEvent(new app.w.Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  expect(app.w.document.querySelector('#inputQueue .pending-message')?.textContent).toContain('Keep this visible');
+  expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
+  expect(scrollTop).toBe(300);
+
+  const inputId = app.live.sent[0]!.id;
+  await app.append([
+    { seq: 1, time: T0 + 1, source: 'extension', kind: 'user_message', inputId, inputDelivery: 'confirmed', messageId: `input:${inputId}`, message: text('Keep this visible') }
+  ]);
+  expect(app.w.document.querySelector('.input-receipt:not([hidden])')).not.toBeNull();
+  expect(app.w.document.querySelectorAll('#inputQueue .assistant-thinking-dot')).toHaveLength(3);
+
+  const answer: Extract<SessionEvent, { kind: 'assistant_message' }> = { seq: 2, time: T0 + 2, source: 'extension',
+    kind: 'assistant_message', messageId: 'follow-answer', message: text('Answer starts'), state: 'streaming', final: false };
+  await app.append([answer]);
+  expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
+  expect(scrollTop).toBe(300);
+
+  scrollTop = 220;
+  pane.dispatchEvent(new app.w.WheelEvent('wheel', { deltaY: -80 }));
+  await app.append([{ ...answer, seq: 3, message: text(`Answer starts ${'and continues '.repeat(20)}`) }]);
+  expect(scrollTop).toBe(220);
+
+  pane.dispatchEvent(new app.w.WheelEvent('wheel', { deltaY: 80 }));
+  scrollTop = 300;
+  pane.dispatchEvent(new app.w.Event('scroll'));
+  scrollTop = 260;
+  await app.append([{ ...answer, seq: 4, message: text(`Answer starts ${'and continues '.repeat(30)}`) }]);
+  expect(scrollTop).toBe(300);
+});
+
+it('retires thinking feedback on an error and its bounded presentation timeout', async () => {
+  const app = await boot([]);
+  const input = app.w.document.getElementById('chatInput') as HTMLTextAreaElement;
+  const send = async (value: string) => {
+    input.value = value;
+    app.w.document.getElementById('composer')!.dispatchEvent(new app.w.Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
+    return app.live.sent.at(-1)!.id;
+  };
+  const confirm = async (inputId: string, seq: number, value: string) => {
+    await app.append([{ seq, time: T0 + seq, source: 'extension', kind: 'user_message', inputId, inputDelivery: 'confirmed', messageId: `input:${inputId}`, message: text(value) }]);
+    expect(app.w.document.querySelector('.input-receipt:not([hidden])')).not.toBeNull();
+    expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).not.toBeNull();
+  };
+
+  const first = await send('First attempt');
+  await confirm(first, 1, 'First attempt');
+  await app.append([{ seq: 2, time: T0 + 2, source: 'extension', kind: 'chat_error', turnId: 'failed-turn', recoverable: true, message: text('Connection interrupted') }]);
+  expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
+
+  let expire: (() => void) | undefined;
+  const nativeSetTimeout = app.w.setTimeout.bind(app.w);
+  (app.w as any).setTimeout = (handler: TimerHandler, delay?: number, ...args: any[]) => {
+    if (delay === 120_000 && typeof handler === 'function') { expire = () => handler(...args); return 4242; }
+    return nativeSetTimeout(handler, delay, ...args);
+  };
+  const second = await send('Second attempt');
+  await confirm(second, 3, 'Second attempt');
+  expect(expire).toBeTypeOf('function');
+  expire!();
+  expect(app.w.document.querySelector('#inputQueue .assistant-thinking')).toBeNull();
 });
 
 it('restores the image draft after rejected injection and removes native-only delivery when the document is removed', async () => {
@@ -1918,6 +1997,7 @@ it('keeps one live compaction across refused source calls and unrelated old-turn
   expect(state()).toBe('Summary requested — waiting for ChatGPT…');
   expect(card.className).toContain('tone-wait');
   expect(card.textContent).not.toContain('Still reading the old task.');
+  await settle(400);
   expect(app.w.document.querySelector('.ev-assistant_message')!.textContent).toContain('Still reading the old task.');
   await app.append([{ ...brief!, seq: 6, time: T0 + 6000 }, { ...end!, seq: 7, time: T0 + 7000 }]);
   expect(state()).toBe('Summary written — saving the handoff…');
@@ -2026,6 +2106,44 @@ it('keeps a streaming message anchor and its following tool group across canonic
   expect(timeline.querySelector<HTMLElement>('.ev-assistant_message')!.dataset.timelineKey).toBe(anchor);
   expect(timeline.querySelector('.tool-group')).toBe(group);
   expect(group.open).toBe(true);
+});
+
+it('reveals a live assistant revision continuously and offers copy only on its final turn message', async () => {
+  const message: Extract<SessionEvent, { kind: 'assistant_message' }> = { seq: 1, origin: 1, time: T0, source: 'extension',
+    kind: 'assistant_message', messageId: 'smooth-message', message: text('Start'), state: 'streaming', final: false };
+  const app = await boot([message]);
+  const target = `Start ${'flow'.repeat(40)}`;
+  app.live.events.push({ ...message, seq: 2, message: text(target) });
+  app.notifySession();
+  await settle(520);
+  const content = () => app.w.document.querySelector<HTMLElement>('.ev-assistant_message .assistant-message-content')!.textContent?.trimEnd() ?? '';
+  expect(content().length).toBeGreaterThan('Start'.length);
+  expect(content().length).toBeLessThan(target.length);
+  await settle(400);
+  expect(content()).toBe(target);
+  const actions = app.w.document.querySelector<HTMLElement>('.assistant-message-actions')!;
+  expect(actions.hidden).toBe(true);
+  app.live.events.push({ ...message, seq: 3, message: text(target), state: 'final', final: true });
+  app.notifySession();
+  await settle(400);
+  expect(actions.hidden).toBe(false);
+  const copy = app.w.document.querySelector<HTMLButtonElement>('.assistant-copy')!;
+  expect(copy.querySelector('.ph-copy')).not.toBeNull();
+  copy.click();
+  await settle();
+  expect(app.live.copied).toEqual([target]);
+});
+
+it('projects streaming revisions immediately when reduced motion is requested', async () => {
+  const message: Extract<SessionEvent, { kind: 'assistant_message' }> = { seq: 1, origin: 1, time: T0, source: 'extension',
+    kind: 'assistant_message', messageId: 'reduced-message', message: text('Start'), state: 'streaming', final: false };
+  const app = await boot([message]);
+  Object.defineProperty(app.w, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
+  const target = `Start ${'now'.repeat(40)}`;
+  app.live.events.push({ ...message, seq: 2, message: text(target) });
+  app.notifySession();
+  await settle(430);
+  expect(app.w.document.querySelector('.assistant-message-content')!.textContent?.trimEnd()).toBe(target);
 });
 
 it('keeps an unfolded tool row as the same open node while the chat keeps appending', async () => {
@@ -3405,6 +3523,7 @@ it.each(['empty', 'failed'])('keeps a fitting chat live after an %s older-page r
   expect(w.document.getElementById('timelineContent')!.style.getPropertyValue('--timeline-scroll-reserve')).toBe('');
   await append([{ seq: 13, time: T0 + 1, source: 'extension', kind: 'assistant_message',
     messageId: 'fresh', message: text('Still receiving live output'), final: true }]);
+  await settle(200);
   expect(timeline.textContent).toContain('Still receiving live output');
   expect(read).toHaveBeenLastCalledWith(expect.any(String), { from: 13, limit: 30 });
 });
