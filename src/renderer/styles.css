@@ -3124,6 +3124,15 @@ nav button:hover, nav button.is-sel { background: var(--hover); color: var(--ink
 .usage-summary span, .muted { color: var(--soft); font-size: calc(13px * var(--text-scale, 1)); }
 .usage-sections { display: grid; gap: 32px; }
 .usage-section { min-width: 0; }
+.usage-message-surface { padding: 0 18px; }
+.usage-messages .settings-section-head { align-items: center; }
+.usage-week-start { flex: none; }
+.usage-message-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.usage-message-counts > div { min-width: 0; padding: 18px 0; }
+.usage-message-counts > div + div { border-inline-start: 1px solid var(--line); padding-inline-start: 18px; }
+.usage-message-counts dt { color: var(--soft); font-size: calc(13px * var(--text-scale, 1)); }
+.usage-message-counts dd { margin: 6px 0 0; font-size: calc(30px * var(--text-scale, 1)); font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#usageMessagePeriod { margin: 0; padding: 0 0 16px; line-height: 1.5; }
 .usage-heatmap-surface { padding: 18px; overflow-x: auto; }
 .usage-limit { display: flex; align-items: center; justify-content: space-between; min-height: 68px; padding: 14px 18px; border-bottom: 1px solid var(--line); gap: 20px; }
 .usage-limit:last-child { border-bottom: 0; }

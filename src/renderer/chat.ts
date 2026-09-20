@@ -23,7 +23,8 @@ import { communicationTitle, foldAgentCommunication } from './agent-communicatio
 import { initContextMeter, paintContextMeter } from './context-meter.js';
 import { installComposerHeightMotion } from './composer-motion.js';
 import { createTextReveal, type TextReveal } from './text-reveal.js';
-import { isAstraModel, isProModel } from '../shared/chat-models.js';
+import { isAstraModel } from '../shared/chat-models.js';
+import { supportsFinishAutomation } from '../shared/finish.js';
 import type { InputImage, InputAttachment, InputAutomation } from '../shared/input.js';
 import { injectableAttachments, queuedFollowup, MAX_INPUT_IMAGES } from '../shared/input.js';
 import type { InputArgs, InputEntry } from '../main/session/input.js';
@@ -1145,8 +1146,8 @@ function paintTaskActions(): void {
 }
 function paintLoopDelivery(): void {
   const model = confirmedComposerModel();
-  $('loopDeliveryRow').hidden = $<HTMLSelectElement>('chatAutomation').value !== 'loop' ||
-    !model || !isProModel(model.model, model.reasoningEffort);
+  $('loopDeliveryRow').hidden = deps.state()?.config.ui.finishTool !== true || !model ||
+    !supportsFinishAutomation($<HTMLSelectElement>('chatAutomation').value as InputAutomation, model.model, model.reasoningEffort);
 }
 function openingLoopDelivery(): boolean | undefined {
   return selectedId === null ? $<HTMLSelectElement>('loopDelivery').value === 'after-turn' : undefined;
@@ -4294,7 +4295,7 @@ export function initChat(next: Deps): void {
       return;
     }
     select.disabled = true;
-    try { await run(api.setSessionAutomation(id, 'loop', select.value === 'after-turn')); }
+    try { await run(api.setSessionAutomation(id, $<HTMLSelectElement>('chatAutomation').value as InputAutomation, select.value === 'after-turn')); }
     finally {
       select.disabled = false;
       if (id === selectedId && generation === selectionGeneration) void refreshSessionControls();
