@@ -90,6 +90,7 @@ import { trayGuidArgsForPlatform, trayImageSpec } from './tray-image.js';
 import { browserWindowIconPath } from './window-icon.js';
 import { editContextMenuTemplate } from './edit-context-menu.js';
 import { attachViewMenuWindow, prewarmViewMenu, shutdownViewMenu } from './view-menu.js';
+import { attachBrowserUseWindow, isBrowserUseSession, shutdownBrowserUse } from './browser-use.js';
 
 /** Durable state file holding the multi-agent run. Hashes only, never credentials. */
 const SWARM_STATE = 'swarm';
@@ -141,6 +142,7 @@ function createWindow(): void {
     }
   });
   attachInternalBrowserWindow(window);
+  attachBrowserUseWindow(window);
   attachViewMenuWindow(window);
 
   if (process.platform === 'win32') window.removeMenu();
@@ -529,7 +531,7 @@ app.on('will-quit', (event) => {
       {
         name: 'process cleanup',
         budgetMs: 15_000,
-        run: () => [unifiedExecManager.terminateAllProcesses(), stopComputerHelper(), shutdownPetOverlay(), shutdownViewMenu(), shutdownInternalBrowser(), pluginManager.close()]
+        run: () => [unifiedExecManager.terminateAllProcesses(), stopComputerHelper(), shutdownBrowserUse(), shutdownPetOverlay(), shutdownViewMenu(), shutdownInternalBrowser(), pluginManager.close()]
       },
       // Phase 3: recorder work can enqueue both session projections and named durable state.
       { name: 'recorder flush', budgetMs: 10_000, run: () => [flushRecorder()] },
@@ -564,7 +566,7 @@ app.on('will-quit', (event) => {
 app.on('web-contents-created', (_event, contents) => {
   // The shell is locked to local content. Only the exact persistent ChatGPT partition may
   // navigate remotely; never generalize this to arbitrary non-default sessions.
-  if (isInternalBrowserSession(contents.session)) return;
+  if (isInternalBrowserSession(contents.session) || isBrowserUseSession(contents.session)) return;
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
   contents.on('will-navigate', (event) => event.preventDefault());
   contents.on('will-redirect', (event) => event.preventDefault());
