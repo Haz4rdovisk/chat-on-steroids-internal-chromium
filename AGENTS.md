@@ -514,10 +514,14 @@ HTTP request -> bounded body / host-origin / secret-path checks
 ```
 
 The MCP payload has no trustworthy conversation id. Accepted ownership joins the normalized
-HTTP `x-request-id` to native page `metadata.request_id`. `fiber.js` emits bounded allowlisted
-evidence; `content.js` confirms the current route and descriptor; `background.js` validates the
-Chrome sender document/epoch; bridge `/correlations` files exact pairs through recorder and
-reads them back before returning `confirmed[]`. `/events` may publish the same exact evidence.
+HTTP `x-request-id` to native page `metadata.request_id`. Connector display names are arbitrary
+user-owned presentation and never participate in ownership, filtering or authorization.
+`fiber.js` emits bounded structural candidates; `content.js` confirms the current route and
+descriptor; `background.js` validates the Chrome sender document/epoch; bridge `/correlations`
+accepts only request ids already observed at local MCP ingress, files exact pairs through recorder
+and reads them back before returning `confirmed[]`. A page-first candidate stays pending and is
+retried; it cannot create a session or local traffic. `/events` may publish only the same confirmed
+exact evidence.
 For a reserved New Chat opening, the shared `/input/bind` route commits its exact claim first;
 only that claim retires, and its promoted conversation/document epoch precedes correlation or event publication.
 Ownership acknowledgement is separate from slow transcript/image writes.
@@ -1020,6 +1024,17 @@ editor/route identity and attachment changes still do.
 The witnessed Send receipt captures the pre-send assistant baseline. If app identity or native
 message source arrives after a fast reply has rendered, that question still owns its reply and
 exact final marker. A later observation must not classify its own answer as old history.
+Conversely, a remounted historical answer above the exact sent question is not a new response
+node. Classic in-place section reuse still requires the existing baseline-signature proof.
+Framed app sends compare the exact prepared text against bounded provider readback forms,
+including hard line breaks decoded before Markdown punctuation. Authored bytes are not rewritten;
+route, epoch, message identity and the complete text comparison remain required.
+Mounted user rows and canonical-history publication resolve accepted input through the same
+source. No intermediate history upsert may publish a serialized or incomplete private frame;
+checking only the final corrected row misses a visible leak. Pending DOM presentation may
+conceal a reserved header whose native BR boundaries collapsed, but cannot grant a receipt.
+The provider's provisional document title can contain that same prepared frame. It is not a
+conversation-name observation; omit it until a real title arrives. Native page text stays intact.
 An exact accepted fresh-chat receipt remains valid when native submit promotes its null
 conversation to the delivered conversation. The same receipt, message, epoch and send lifetime
 must still agree; a second navigation or replaced receipt cannot inherit that acceptance.
@@ -2737,6 +2752,11 @@ separate persistent `persist:cos-web` session and only accepts HTTP(S) documents
 load the companion extension, participate in ChatGPT delivery/recording/recovery, reuse the
 bridge, or import the Internal Chromium subsystem. `internal-browser.ts` and Browser Use remain
 independent owners with different partitions and no cross-imports.
+Model-facing routing preserves that boundary explicitly: Browser Use or its Browser panel uses
+only Core's `browser` tool. Existing companion-exposed tabs, including hosted ChatGPT pages, use
+Desktop `browser_*`; a missing companion-browser result says nothing about Browser Use. Ordinary
+website work defaults to Browser Use. Descriptions and refusal guidance may name the other
+surface but never dispatch to it or create an Internal Chromium dependency.
 
 The main-process owner holds tabs, active-tab identity, origin consent, navigation/layout epochs,
 snapshots and native `WebContentsView` geometry. A first agent request for an unapproved exact
@@ -2747,6 +2767,23 @@ human consent. Renderer chrome projects that state through the
 fixed Browser Use IPC allowlist. Files, Sub-agents and Browser Use are mutually exclusive views
 of the same right work slot. Hiding the panel does not retire the browser session or grant new
 navigation authority. The app-owned ChatGPT dock remains an independent shell split.
+
+Design inspection is an explicit user-owned mode on the active Browser Use tab. Main binds it to
+that tab and its current navigation epoch, while Chromium's CDP Overlay owns hover highlighting
+and consumes the selection click before the page can act on it. The renderer receives only the
+bounded selected-element summary (tag, accessible role/name, selector, classes, dimensions, box
+model and a fixed allowlist of relevant computed styles). When the document itself exposes them,
+main also publishes at most five probabilistic source candidates from React/Vue development
+metadata and exact matched author-style locations; absence remains empty rather than guessed.
+These candidates are evidence to verify, never source ownership or edit authority. “Ask agent” explicitly captures a
+bounded viewport-clamped PNG crop from that same selected element and prepares editable composer
+context; selection alone captures no image and sends nothing. Escape, panel hiding,
+navigation/reload, tab switching, tab closure and an explicit toggle-off clear the mode and
+highlight. After selection, main applies a restrained inline outline to the exact backend node,
+preserving its prior inline outline values; it removes the outline for Ask agent's bounded
+screenshot and restores it afterward. This annotation adds no page node, timer or layout owner.
+Stale node events cannot publish across a document or tab change. This mode
+does not expose CDP to the renderer/model and has no authority over Internal Chromium.
 
 Agent input follows `inspect → act → inspect`. Tab selection is an explicit action; observing a
 named background tab cannot change the active tab. A loading state is returned before snapshot

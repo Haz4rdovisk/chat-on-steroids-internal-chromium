@@ -142,6 +142,20 @@ it('recognizes only the exact app-owned browser session', async () => {
   expect(browser.isInternalBrowserSession({} as any)).toBe(false);
 });
 
+it('conceals provisional prompt titles only in the dock projection', async () => {
+  const id = await browser.prewarmInternalBrowser();
+  const contents = fake.contents.get(id)!;
+  const title = '[[COS_CONTEXT:12345]] Private transport, not a conversation title';
+  contents.title = title;
+  contents.emit('page-title-updated', {}, title);
+  expect(browser.internalBrowserDockState().tabs[0]?.title).toBe('');
+  expect(await browser.handleInternalBrowserHostRequest({ action: 'get', tabId: id }))
+    .toMatchObject({ tab: { id, title } });
+  expect(contents.getTitle()).toBe(title);
+  contents.emit('page-title-updated', {}, 'Generated conversation title');
+  expect(browser.internalBrowserDockState().tabs[0]?.title).toBe('Generated conversation title');
+});
+
 it('keeps browser-created child tabs alive in the background without requesting the dock', async () => {
   await browser.ensureInternalBrowserReady();
   const created = await browser.handleInternalBrowserHostRequest({

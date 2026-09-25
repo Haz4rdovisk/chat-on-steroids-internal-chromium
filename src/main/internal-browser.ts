@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { app, BrowserWindow, session, shell, WebContentsView, type Session } from 'electron';
 import { z } from 'zod';
 import type { InternalBrowserBounds, InternalBrowserDockState, InternalBrowserTabState } from '../shared/internal-browser.js';
+import { userPromptFrameHint } from '../shared/user-prompt.js';
 import { extensionDir } from './extension-path.js';
 import { logInfo, logWarn } from './logger.js';
 import { wakeBrowserWork } from './browser-wake.js';
@@ -518,7 +519,8 @@ export function internalBrowserDockState(): InternalBrowserDockState {
       id: tab.id,
       active: tab.id === activeTabId,
       status: tab.status,
-      title: tab.title,
+      // Only the dock label is filtered; native tab identity/control stays unchanged.
+      title: userPromptFrameHint(tab.title, true) ? '' : tab.title,
       url: tab.pendingUrl || tab.url
     }));
   return { open: dockOpen, ready: ready !== null, tabId: activeTabId, tabs: visibleTabs };
