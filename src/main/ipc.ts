@@ -143,6 +143,7 @@ import {
 import {
   browserUseHistory,
   browserUseState,
+  captureBrowserUseDesignContext,
   closeBrowserUseTab,
   hideBrowserUsePanel,
   layoutBrowserUsePanel,
@@ -150,6 +151,7 @@ import {
   noteBrowserUseUserTakeover,
   openBrowserUseTab,
   selectBrowserUseTab,
+  setBrowserUseDesignMode,
   settleBrowserUsePermission,
   showBrowserUsePanel
 } from './browser-use.js';
@@ -1259,10 +1261,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null, quitToInstall
       z.object({ action: z.literal('back'), tabId: z.number().int().positive() }).strict(),
       z.object({ action: z.literal('forward'), tabId: z.number().int().positive() }).strict(),
       z.object({ action: z.literal('reload'), tabId: z.number().int().positive() }).strict(),
+      z.object({ action: z.literal('inspect'), tabId: z.number().int().positive(), enabled: z.boolean() }).strict(),
       z.object({ action: z.literal('approve'), id: z.string().uuid(), decision: z.enum(['once', 'always', 'deny']) }).strict()
     ]).parse(payload);
     if (request.action === 'query') return browserUseState();
-    if (['hide', 'create', 'select', 'close', 'navigate', 'back', 'forward', 'reload'].includes(request.action)) {
+    if (['hide', 'create', 'select', 'close', 'navigate', 'back', 'forward', 'reload', 'inspect'].includes(request.action)) {
       noteBrowserUseUserTakeover();
     }
     if (request.action === 'hide') return hideBrowserUsePanel();
@@ -1273,8 +1276,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null, quitToInstall
     if (request.action === 'back' || request.action === 'forward' || request.action === 'reload') {
       return browserUseHistory(request.tabId, request.action, 'user');
     }
+    if (request.action === 'inspect') return setBrowserUseDesignMode(request.tabId, request.enabled);
     if (request.action === 'approve') return settleBrowserUsePermission(request.id, request.decision);
     return showBrowserUsePanel(scaleBrowserUseBounds(request.bounds));
+  });
+  handle('browserUse:designContext', async payload => {
+    const request = z.object({
+      tabId: z.number().int().positive(),
+      selectionId: z.number().int().positive()
+    }).strict().parse(payload);
+    noteBrowserUseUserTakeover();
+    return captureBrowserUseDesignContext(request.tabId, request.selectionId);
   });
 
   handle('sessions:openChat', async (payload) => {

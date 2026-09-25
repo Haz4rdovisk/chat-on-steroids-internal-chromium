@@ -15,7 +15,7 @@ import type { SkillSummary, ManagedSkill, GitHubSkillUpdateCheck, SkillLibrary, 
 import type { PluginSnapshot, PluginInstallRequest, PluginConfigPatch } from '../shared/plugins.js';
 import type { PetLibraryState, PetOverlayControlState, PetRuntimeAsset } from '../shared/pets.js';
 import type { InternalBrowserDockRequest, InternalBrowserDockState } from '../shared/internal-browser.js';
-import type { BrowserUseBounds, BrowserUseRequest, BrowserUseState } from '../shared/browser-use.js';
+import type { BrowserUseBounds, BrowserUseDesignContext, BrowserUseRequest, BrowserUseState } from '../shared/browser-use.js';
 import type { ViewMenuCommand, ViewMenuToggleRequest, ViewMenuToggleState } from '../shared/view-menu.js';
 /**
  * The entire renderer-facing API.
@@ -244,6 +244,8 @@ const api = {
   },
   getSessionControls: (id: string) => call<SessionControlsView>('sessions:controls', { id }),
   browserUse: (request: BrowserUseRequest) => call<BrowserUseState>('browserUse:panel', request),
+  browserUseDesignContext: (tabId: number, selectionId: number) =>
+    call<BrowserUseDesignContext>('browserUse:designContext', { tabId, selectionId }),
   browserUseLayout: (bounds: BrowserUseBounds): void => ipcRenderer.send('browserUse:layout', bounds),
   browserUseLayoutSync: (bounds: BrowserUseBounds): boolean => ipcRenderer.sendSync('browserUse:layoutSync', bounds) === true,
   onBrowserUseShowRequested: (listener: () => void): (() => void) => {
